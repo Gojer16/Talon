@@ -13,10 +13,20 @@ const SERVICE_LABEL = 'ai.talon.gateway';
 /**
  * Get the path to the talon executable
  */
-function getTalonExecutable(): string {
-    // In production, this would be the installed binary
-    // For now, use node + the built CLI
+function getTalonExecutable(runtime: 'node' | 'bun' = 'node'): string {
     const cliPath = path.join(process.cwd(), 'dist', 'cli', 'index.js');
+    
+    if (runtime === 'bun') {
+        // Check if bun is available
+        try {
+            execSync('which bun', { stdio: 'ignore' });
+            return `bun ${cliPath}`;
+        } catch {
+            console.log(chalk.yellow('  ⚠ Bun not found, falling back to Node'));
+            return `${process.execPath} ${cliPath}`;
+        }
+    }
+    
     return `${process.execPath} ${cliPath}`;
 }
 
@@ -74,7 +84,7 @@ export function isServiceRunning(): boolean {
 /**
  * Install Talon as a system service
  */
-export async function installService(): Promise<void> {
+export async function installService(runtime: 'node' | 'bun' = 'node'): Promise<void> {
     console.log(chalk.bold.cyan('\n🔧 Installing Talon as system service...\n'));
     
     if (isServiceInstalled()) {
@@ -85,7 +95,9 @@ export async function installService(): Promise<void> {
 
     try {
         const { dir, file } = getServicePaths();
-        const executable = getTalonExecutable();
+        const executable = getTalonExecutable(runtime);
+
+        console.log(chalk.dim(`  Runtime: ${runtime}`));
 
         // Ensure directory exists
         if (!fs.existsSync(dir)) {

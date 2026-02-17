@@ -609,19 +609,33 @@ async function stepHealthCheck(config: WizardResult): Promise<void> {
 async function stepServiceInstall(): Promise<void> {
     console.log(chalk.bold.cyan('\n  Step 8/8: Service Installation\n'));
 
-    const installAsService = await confirm({
-        message: 'Install Talon as system service? (recommended)',
-        default: true,
+    const installAsService = await select({
+        message: 'Install Gateway service?',
+        choices: [
+            { name: 'Yes (recommended)', value: 'yes' },
+            { name: 'No (manual start)', value: 'no' },
+        ],
     });
 
-    if (!installAsService) {
+    if (installAsService === 'no') {
         console.log(chalk.dim('  Skipped - install later with `talon service install`\n'));
         return;
     }
 
+    // Runtime selection
+    const runtime = await select({
+        message: 'Service runtime:',
+        choices: [
+            { name: 'Node (recommended)', value: 'node' as const },
+            { name: 'Bun', value: 'bun' as const },
+        ],
+    });
+
+    console.log(chalk.dim(`  Using ${runtime} runtime\n`));
+
     try {
         const { installService } = await import('./service.js');
-        await installService();
+        await installService(runtime);
     } catch (err) {
         console.log(chalk.yellow('  ⚠ Service installation failed'));
         console.log(chalk.dim(`    Try again with: talon service install\n`));
