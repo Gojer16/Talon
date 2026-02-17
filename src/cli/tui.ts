@@ -39,7 +39,14 @@ export async function startTUI(): Promise<void> {
         process.exit(1);
     }
 
-    console.log(chalk.green('✓ Connected to gateway\n'));
+    // Show status indicators
+    const configPath = path.join(os.homedir(), '.talon', 'config.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    
+    console.log(chalk.green('✓ Connected to gateway'));
+    console.log(chalk.yellow('⚡ Model: ') + chalk.dim(config.agent.model));
+    console.log(chalk.blue('📍 Workspace: ') + chalk.dim(config.workspace.root));
+    console.log('');
 
     const ws = new WebSocket(GATEWAY_URL);
     const rl = readline.createInterface({
@@ -49,14 +56,9 @@ export async function startTUI(): Promise<void> {
     });
 
     let isWaitingForResponse = false;
+    let responseBuffer = '';
 
     ws.on('open', () => {
-        // Send hello message
-        ws.send(JSON.stringify({
-            type: 'hello',
-            version: '0.3.0',
-        }));
-
         rl.prompt();
     });
 
@@ -70,24 +72,47 @@ export async function startTUI(): Promise<void> {
                 if (payload?.type === 'text') {
                     readline.clearLine(process.stdout, 0);
                     readline.cursorTo(process.stdout, 0);
-                    process.stdout.write(chalk.green('🦅 Talon > ') + payload.content);
+                    responseBuffer += payload.content;
                 } else if (payload?.type === 'thinking') {
                     readline.clearLine(process.stdout, 0);
                     readline.cursorTo(process.stdout, 0);
-                    process.stdout.write(chalk.dim(`  💭 ${payload.content}`));
+                    process.stdout.write(chalk.dim(`  ⏳ Talon is thinking...`));
                 } else if (payload?.type === 'error') {
-                    console.log(chalk.red('\n❌ Error: ') + payload.content);
+                    readline.clearLine(process.stdout, 0);
+                    readline.cursorTo(process.stdout, 0);
+                    console.log(chalk.red('❌ Error: ') + payload.content);
                     isWaitingForResponse = false;
                     rl.prompt();
                 }
             } else if (msg.type === 'agent.response.end') {
-                console.log('\n');
+                readline.clearLine(process.stdout, 0);
+                readline.cursorTo(process.stdout, 0);
+                
+                if (responseBuffer) {
+                    console.log(chalk.gray('╭─ Talon ─────────────────────'));
+                    console.log(chalk.gray('│ ') + responseBuffer);
+                    console.log(chalk.gray('╰─────────────────────────────'));
+                }
+                
+                responseBuffer = '';
+                console.log('');
                 isWaitingForResponse = false;
                 rl.prompt();
             } else if (msg.type === 'tool.call') {
                 readline.clearLine(process.stdout, 0);
                 readline.cursorTo(process.stdout, 0);
-                console.log(chalk.dim(`  🛠️  Using ${msg.payload?.toolCall?.name || 'tool'}...`));
+                const toolName = msg.payload?.toolCall?.name || 'tool';
+                const toolArgs = msg.payload?.toolCall?.args;
+                let toolInfo = toolName;
+                
+                if (toolArgs?.path) {
+                    const fileName = path.basename(toolArgs.path);
+                    toolInfo = `${toolName} → ${fileName}`;
+                } else if (toolArgs?.query) {
+                    toolInfo = `${toolName} → ${toolArgs.query.substring(0, 30)}...`;
+                }
+                
+                console.log(chalk.dim(`  🛠️  ${toolInfo}`));
             }
         } catch (err) {
             console.log(chalk.red('\n[ERROR] Parse error:'), err);
