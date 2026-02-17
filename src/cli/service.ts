@@ -237,16 +237,25 @@ export async function restartService(): Promise<void> {
             
             try {
                 // Try kickstart (modern way to restart)
-                execSync(`launchctl kickstart -k ${domain}/${SERVICE_LABEL}`, { stdio: 'pipe' });
+                execSync(`launchctl kickstart -k ${domain}/${SERVICE_LABEL}`, { 
+                    stdio: 'pipe',
+                    timeout: 5000
+                });
             } catch {
                 // Fallback: bootout + bootstrap
                 const { file } = getServicePaths();
                 try {
-                    execSync(`launchctl bootout ${domain}/${SERVICE_LABEL}`, { stdio: 'pipe' });
+                    execSync(`launchctl bootout ${domain}/${SERVICE_LABEL}`, { 
+                        stdio: 'pipe',
+                        timeout: 3000
+                    });
                 } catch {
                     // Ignore if not loaded
                 }
-                execSync(`launchctl bootstrap ${domain} ${file}`, { stdio: 'pipe' });
+                execSync(`launchctl bootstrap ${domain} ${file}`, { 
+                    stdio: 'pipe',
+                    timeout: 3000
+                });
             }
         } else if (process.platform === 'linux') {
             console.log(chalk.dim('  Restarting systemd service...'));
