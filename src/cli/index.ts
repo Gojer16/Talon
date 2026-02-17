@@ -199,6 +199,18 @@ Examples:
             break;
         }
 
+        case 'provider': {
+            const { addProvider } = await import('./provider.js');
+            await addProvider();
+            break;
+        }
+
+        case 'switch': {
+            const { switchModel } = await import('./provider.js');
+            await switchModel();
+            break;
+        }
+
         default: {
             console.error(`Unknown command: ${command}`);
             console.error('Run `talon --help` for available commands.');
