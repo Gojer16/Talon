@@ -93,6 +93,13 @@ Talon can delegate specialized tasks to lightweight subagents using cheap models
 
 **Cost Savings:** Main agent uses gpt-4o ($5/1M tokens), subagents use gpt-4o-mini ($0.15/1M tokens) = **97% savings**
 
+**Configuration:** Set `agent.subagentModel` in config to use any model:
+- `openrouter/openai/gpt-4o-mini` - OpenRouter (reliable)
+- `openrouter/google/gemini-flash-1.5` - Google (fastest, $0.075/1M)
+- `deepseek/deepseek-chat` - DeepSeek (cheapest, $0.14/1M)
+
+See [docs/SUBAGENT_CONFIGURATION.md](docs/SUBAGENT_CONFIGURATION.md) for details.
+
 ### CLI Features
 
 ```bash

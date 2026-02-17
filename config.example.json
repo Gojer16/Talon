@@ -16,6 +16,7 @@
 
   "agent": {
     "model": "deepseek/deepseek-chat",
+    "subagentModel": "openrouter/openai/gpt-4o-mini",
     "providers": {
       "deepseek": {
         "apiKey": "${DEEPSEEK_API_KEY}",
@@ -23,7 +24,7 @@
       },
       "openrouter": {
         "apiKey": "${OPENROUTER_API_KEY}",
-        "models": ["anthropic/claude-3.5-sonnet", "openai/gpt-4o-mini"]
+        "models": ["anthropic/claude-3.5-sonnet", "openai/gpt-4o-mini", "google/gemini-flash-1.5"]
       }
     },
     "maxIterations": 10,
