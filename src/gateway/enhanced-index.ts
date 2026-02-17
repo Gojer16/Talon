@@ -93,8 +93,8 @@ export class TalonGateway {
         );
         this.agentLoop.registerFallbackProviders();
         
-        // Initialize subagents (TODO: Not yet implemented)
-        // await this.initializeSubagents();
+        // Initialize subagents
+        await this.initializeSubagents();
         
         registerAllTools(this.agentLoop, this.config);
 
@@ -190,12 +190,24 @@ export class TalonGateway {
     }
 
     /**
-     * Initialize subagent system (TODO: Not yet implemented)
+     * Initialize subagent system
      */
     private async initializeSubagents(): Promise<void> {
-        // TODO: Implement subagent system
-        // Tests written in tests/unit/subagents.test.ts
-        logger.info('Subagent system not yet implemented');
+        const { SubagentRegistry, ResearchSubagent, WriterSubagent, PlannerSubagent, CriticSubagent, SummarizerSubagent } = await import('../subagents/index.js');
+        const { createSubagentTool } = await import('../tools/subagent-tool.js');
+        
+        const registry = new SubagentRegistry();
+        const subagentModel = this.config.agent.subagentModel || 'gpt-4o-mini';
+        
+        registry.register('research', new ResearchSubagent(subagentModel, this.modelRouter));
+        registry.register('writer', new WriterSubagent(subagentModel, this.modelRouter));
+        registry.register('planner', new PlannerSubagent(subagentModel, this.modelRouter));
+        registry.register('critic', new CriticSubagent(subagentModel, this.modelRouter));
+        registry.register('summarizer', new SummarizerSubagent(subagentModel, this.modelRouter));
+        
+        this.agentLoop.registerTool(createSubagentTool(registry));
+        
+        logger.info({ model: subagentModel }, 'Subagents initialized');
     }
 
     /**

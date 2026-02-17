@@ -23,8 +23,9 @@ Generates coverage reports in multiple formats:
 - LCOV report in `coverage/lcov.info`
 - JSON summary in `coverage/coverage-summary.json`
 
-**Core Components (86 tests):**
+**Core Components (125 tests):**
 - Config Schema (5 tests) ✅
+- Config Reload (10 tests) ✅
 - Memory Manager (7 tests) ✅
 - Context Guard (9 tests) ✅
 - Event Bus (6 tests) ✅
@@ -32,7 +33,9 @@ Generates coverage reports in multiple formats:
 - Session Manager (11 tests) ✅
 - Model Router (9 tests) ✅
 - Prompts (11 tests) ✅
+- Message Router (13 tests) ✅
 - Subagents (19 tests) ✅ *TDD - Implementation needed*
+- Service Management (15 tests) ✅
 
 **Tools (110 tests):**
 - File Tools (28 tests) ✅
@@ -44,21 +47,29 @@ Generates coverage reports in multiple formats:
 
 ```
 tests/
-├── unit/                    # Unit tests (196 tests)
+├── unit/                    # Unit tests (235 tests)
 │   ├── config-schema.test.ts
+│   ├── config-reload.test.ts
 │   ├── context-guard.test.ts
 │   ├── event-bus.test.ts
 │   ├── fallback.test.ts
 │   ├── file-tools.test.ts
 │   ├── memory-manager.test.ts
 │   ├── memory-tools.test.ts
+│   ├── message-router.test.ts
 │   ├── model-router.test.ts
 │   ├── prompts.test.ts
 │   ├── session-manager.test.ts
+│   ├── service-management.test.ts
 │   ├── shell-tools.test.ts
 │   ├── subagents.test.ts
 │   └── web-tools.test.ts
-└── integration/             # Integration tests (TODO)
+└── integration/            # Integration tests (56 tests)
+    ├── http-api.test.ts
+    ├── memory-context-guard.test.ts
+    ├── session-agent.test.ts
+    ├── tool-registration.test.ts
+    └── websocket-server.test.ts
 ```
 
 ## Coverage by Component
@@ -66,19 +77,27 @@ tests/
 | Component | Tests | Status | Notes |
 |-----------|-------|--------|-------|
 | Config System | 5 | ✅ 100% | |
+| Config Reload | 10 | ✅ 100% | |
 | Memory Manager | 7 | ✅ 100% | |
 | Context Guard | 9 | ✅ 100% | |
 | Event Bus | 6 | ✅ 100% | |
 | Fallback System | 9 | ✅ 100% | |
 | Session Manager | 11 | ✅ 100% | |
 | Model Router | 9 | ✅ 100% | |
+| Message Router | 13 | ✅ 100% | |
 | Prompts | 11 | ✅ 100% | |
+| Service Management | 15 | ✅ 100% | |
 | **Subagents** | 19 | ✅ 100% | TDD - Needs implementation |
 | **File Tools** | 28 | ✅ 100% | |
 | **Shell Tools** | 32 | ✅ 100% | |
 | **Web Tools** | 30 | ✅ 100% | |
 | **Memory Tools** | 20 | ✅ 100% | |
-| **Total** | **196** | **✅ 100%** | |
+| **HTTP API** | 13 | ✅ 100% | Integration |
+| **WebSocket Server** | 10 | ✅ 100% | Integration |
+| **Memory+Context** | 8 | ✅ 100% | Integration |
+| **Session+Agent** | 8 | ✅ 100% | Integration |
+| **Tool Registration** | 5 | ✅ 100% | Integration |
+| **Total** | **291** | **✅ 100%** | |
 
 ## Test Categories
 
