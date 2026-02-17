@@ -238,7 +238,7 @@ async function stepModelAuth(): Promise<WizardResult['agent']> {
         console.log(chalk.yellow('  Continuing anyway — you can fix this later.\n'));
     }
 
-    const fullModelId = `${providerId}/${finalModel}`;
+    const fullModelId = providerId === 'deepseek' ? finalModel : `${providerId}/${finalModel}`;
 
     return {
         model: fullModelId,
