@@ -419,8 +419,13 @@ async function changeProvider(): Promise<void> {
                     stdio: 'pipe',
                     timeout: 10000,
                 });
-                console.log(chalk.green('  ✓ Gateway restarted\n'));
-                console.log(chalk.yellow('  Reconnect with: /exit then talon tui\n'));
+                console.log(chalk.green('  ✓ Gateway restarted'));
+                console.log(chalk.dim('  Waiting for gateway...'));
+                
+                // Wait for gateway to be ready
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                console.log(chalk.green('  ✓ Ready! Continue chatting...\n'));
             } catch (err) {
                 console.log(chalk.red('  ✗ Failed to restart gateway'));
                 console.log(chalk.yellow('  Run manually: talon service restart\n'));
@@ -480,8 +485,13 @@ async function switchModel(): Promise<void> {
                     stdio: 'pipe',
                     timeout: 10000,
                 });
-                console.log(chalk.green('  ✓ Gateway restarted\n'));
-                console.log(chalk.yellow('  Reconnect with: /exit then talon tui\n'));
+                console.log(chalk.green('  ✓ Gateway restarted'));
+                console.log(chalk.dim('  Waiting for gateway...'));
+                
+                // Wait for gateway to be ready
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                console.log(chalk.green('  ✓ Ready! Continue chatting...\n'));
             } catch (err) {
                 console.log(chalk.red('  ✗ Failed to restart gateway'));
                 console.log(chalk.yellow('  Run manually: talon service restart\n'));
