@@ -1,146 +1,219 @@
-# Google Assistant - Personalized Persona AI Architecture
+# Talon - Missing Features Roadmap
 
-> **Vision**: A high-agency, proactive personal assistant that lives on your machine. It utilizes a "Soul" (dynamic persona) and a "Shadow Loop" (proactive observation) to anticipate your needs and execute tasks with full PC access.
-
----
-
-## 1. Core Architecture: The "Three-Layer" Brain
-
-The assistant is structured into three distinct layers that separate raw system events, high-level reasoning, and long-term personality.
-
-### Layer 1: The Soul (`SOUL.md`)
-- **Dynamic Persona**: A markdown-based "constitution" that defines the assistant's identity, communication style, and core values.
-- **Self-Evolution**: The assistant can propose updates to its own `SOUL.md` as it learns more about your preferences and "vibe."
-- **Persistence**: Unlike a session prompt, the Soul is permanent and shared across all interaction channels.
-
-### Layer 2: The Shadow Loop (Proactive Reflexes)
-- **Background Observer**: A local service monitoring the filesystem (`chokidar`), shell history, and terminal errors.
-- **Event-Driven Intelligence**: Instead of waiting for a prompt, it detects system events and uses local heuristics to filter "interesting" moments.
-- **Proactive Proposals**: When an event is caught (e.g., a failed build or a saved file), the assistant proposes a fix or action via a non-intrusive notification.
-
-### Layer 3: The Cortex (OpenRouter LLM)
-- **High-Level Reasoning**: Powered by elite models (Claude 3.5, GPT-4o, Gemini Pro) via OpenRouter.
-- **Tool Orchestration**: Plans and executes multi-step operations using the local toolset.
-- **Semantic Memory**: Uses vector search to recall past conversations and learned facts.
+> **What's Left**: The proactive intelligence layer and advanced tooling that will make Talon truly autonomous.
 
 ---
 
-## 2. Full PC Access & Toolset
+## 🚧 MISSING IMPLEMENTATIONS
 
-Since this is a local-first implementation for personal use, the assistant has direct, non-sandboxed access to the host machine.
+### 1. The Shadow Loop (Proactive Intelligence) ❌
 
-### Core Tool Categories
-| Category | Tools | Description |
-|----------|-------|-------------|
-| **Filesystem** | `file_read`, `file_write`, `file_patch`, `file_search` | Direct manipulation of your code and docs. |
-| **Shell** | `shell_exec` | Runs commands in your native ZSH/Bash environment. |
-| **Browser** | `browser_cdp` | Controls Chrome/Chromium via Playwright/Puppeteer. |
-| **OS** | `os_notify`, `clipboard_sync`, `screen_capture` | Interacts with your macOS/Windows/Linux environment. |
-| **Persona** | `soul_update`, `memory_save_fact` | Manages the assistant's evolving personality. |
+**Status:** Config schema exists, but NO implementation
 
-### Safety Model
-- **Confirmation-Required**: High-impact or destructive actions (e.g., `rm`, `git push`, deleting files) trigger a `[Y/n]` prompt in the UI.
-- **Privacy Alerts**: Reading sensitive directories (like `.ssh` or `.env`) requires explicit user permission.
-
----
-
-## 3. The Shadow Loop Implementation
-
-The "Shadow Loop" ensures the assistant is always one step ahead.
-
-1. **Ingest**: File watchers detect a change (e.g., `App.tsx` saved).
-2. **Local Filter**: A lightweight check determines if the change is significant (e.g., "Is there a syntax error?").
-3. **Ghost Message**: If significant, the assistant sends a "Ghost Message" to the Gateway: *"I noticed a potential bug in your recent change to the auth hook. Want me to run the tests?"*
-4. **Action**: Upon user approval (click/keypress), the assistant executes the fix.
-
----
-
-## 4. Memory & Knowledge Tiers
-
-| Tier | Format | Purpose |
-|------|--------|---------|
-| **Working Memory** | JSON/In-memory | Current session context and active tasks. |
-| **The Soul** | `SOUL.md` | Core personality, tone, and identity. |
-| **Fact Store** | `FACTS.json` | Structured facts about you (e.g., "Prefers dark mode"). |
-| **Long-term Ledger** | SQLite/Vector | Searchable history of every interaction ever had. |
-
----
-
-## 5. Intelligence & Memory Strategy (The "OpenClaw Killer")
-
-To ensure high performance and low cost, the assistant follows a strict memory and routing protocol.
-
-### A. Context Management
-- **The "Context Slimming" Rule**: Never send the full chat history. The input context is strictly limited to:
-  1. System Prompt (Soul + Identity)
-  2. Memory Summary (Max 800 tokens, dynamically updated)
-  3. Last 5-10 User Messages
-  4. Truncated Tool Results
-- **Memory Compression**: Every time the conversation exceeds a threshold, a "Worker Agent" summarizes the oldest messages into the `Memory Summary` and prunes the raw history.
-
-### B. Routing & Model Selection
-| Agent Tier | Model | Responsibility |
-|------------|-------|----------------|
-| **Main Orchestrator** | Gemini Flash Lite | Default interaction, planning, and personality. |
-| **Subagents (Workers)** | GPT-5 Nano | Tool execution, summarization, and data extraction. |
-| **Reasoning Engine** | DeepSeek V3.2 | Complex logic, bug root-cause analysis, and architecture. |
-
-### C. Subagent Design
-- **Task-Specific**: Subagents receive a task and minimal context, returning only structured JSON.
-- **Example Flow**: `Main Agent` -> `Research Subagent` -> `JSON Result` -> `Main Agent`.
-
----
-
-## 6. Project Structure (The "Personal" Monolith)
-
-To keep development fast and avoid the complexity of a monorepo, the project uses a streamlined monolithic structure.
+**What Needs to Be Built:**
 
 ```text
-/PersonalOpenClawVersion/
-├── src/                    # Core logic
-│   ├── gateway/            # WebSocket server & message routing
-│   ├── agent/              # OpenRouter integration & Brain logic
-│   │   ├── memory.ts       # SQLite/Vector storage logic
-│   │   └── persona.ts      # Soul.md parsing & update logic
-│   ├── shadow/             # The "Proactive" loop
-│   │   ├── watcher.ts      # Filesystem (chokidar) integration
-│   │   └── heuristics.ts   # Rules for "Ghost Messages"
-│   └── tools/              # Individual tool implementations
-│       ├── shell.ts        # Executing bash
-│       ├── fs.ts           # Reading/Writing files
-│       └── browser.ts      # Playwright/Puppeteer
-├── ui/                     # Frontend (React/Next.js)
-│   ├── components/         # Chat bubbles & Canvas widgets
-│   └── hooks/              # WebSocket connection management
-├── workspace/              # Your personal data (The Assistant's "Home")
-│   ├── SOUL.md             # The assistant's identity
-│   ├── FACTS.json          # Structured facts about you
-│   └── skills/             # Folder for custom scripts/plugins
-├── .env                    # OpenRouter API Key & local paths
-├── package.json            # Simple dependency management
-└── tsconfig.json           # TypeScript configuration
+src/shadow/
+├── index.ts          # Main shadow loop orchestrator
+├── watcher.ts        # Filesystem monitoring (chokidar)
+├── heuristics.ts     # Event filtering rules
+└── ghost.ts          # Ghost message system
 ```
+
+**Features to Implement:**
+- **Background Observer**: Monitor filesystem with `chokidar`
+- **Shell History Monitoring**: Watch for command failures
+- **Terminal Error Detection**: Catch build errors, test failures
+- **Event-Driven Intelligence**: Filter "interesting" moments
+- **Ghost Messages**: Send proactive suggestions to gateway
+- **Non-intrusive Notifications**: Propose fixes without interrupting
+
+**Example Flow:**
+1. User saves `App.tsx`
+2. Shadow detects TypeScript error
+3. Sends ghost message: *"I noticed a type error in App.tsx. Want me to fix it?"*
+4. User approves → Agent executes fix
 
 ---
 
-## 7. Implementation Roadmap (4-Week Deliberate Practice)
+### 2. Browser Automation Tools ❌
 
-### Week 1: The Core Loop
-- Set up Node.js Gateway + OpenRouter.
-- Implement basic tool calling support (Shell, FS).
-- Create the "Main Agent" loop with real-time logging and debug output.
+**Status:** Config schema exists, but NO implementation
 
-### Week 2: Memory & Compression
-- Build the `Memory Summary` system and context trimming logic.
-- Implement the "Fact Extraction" loop to update `FACTS.json` automatically.
-- Ensure the assistant can "summarize its way out" of long conversations.
+**What Needs to Be Built:**
 
-### Week 3: Subagents & Core Tools
-- Implement the Subagent routing logic for `ResearchAgent` and `WriterAgent`.
-- Build core productivity tools: `notes_save/search`, `web_search/open`, and `task_list`.
-- Integrate the "Shadow Loop" filesystem watcher for proactive suggestions.
+```text
+src/tools/browser.ts
+```
 
-### Week 4: Routing & Budget Mode
-- Configure model tiering: Gemini Flash Lite for main, GPT-5 Nano for subagents, DeepSeek for reasoning.
-- Build a "Budget/Power" mode toggle to control which models are used.
-- Finalize the WebChat UI and "Canvas" for side-by-side execution view.
+**Tools to Implement:**
+- `browser_open` - Open URL in browser
+- `browser_navigate` - Navigate to page
+- `browser_click` - Click element
+- `browser_type` - Type text
+- `browser_screenshot` - Capture screenshot
+- `browser_extract` - Extract page content
+
+**Integration:**
+- Playwright or Puppeteer
+- Chrome DevTools Protocol (CDP)
+- Headless/headed mode toggle
+
+---
+
+### 3. OS Integration Tools ❌
+
+**Status:** Not implemented
+
+**What Needs to Be Built:**
+
+```text
+src/tools/os.ts
+```
+
+**Tools to Implement:**
+- `os_notify` - System notifications (macOS/Linux/Windows)
+- `clipboard_read` - Read clipboard content
+- `clipboard_write` - Write to clipboard
+- `screen_capture` - Take screenshots
+
+---
+
+### 4. Long-term Ledger (Vector/SQLite) ❌
+
+**Status:** Not implemented
+
+**What Needs to Be Built:**
+
+```text
+src/memory/
+├── vector.ts         # Vector embeddings
+├── sqlite.ts         # SQLite database
+└── search.ts         # Semantic search
+```
+
+**Features to Implement:**
+- SQLite database for all conversations
+- Vector embeddings for semantic search
+- Searchable history across all sessions
+- Fact extraction and indexing
+
+**Current State:**
+- ✅ In-memory sessions
+- ✅ JSON-based FACTS.json
+- ✅ Memory compression
+- ❌ No persistent searchable history
+
+---
+
+### 5. Subagent Execution Framework ❌
+
+**Status:** Prompts exist, but NO execution system
+
+**What Needs to Be Built:**
+
+```text
+src/agent/subagents/
+├── index.ts          # Subagent spawner
+├── router.ts         # Task delegation
+└── parser.ts         # JSON result parsing
+```
+
+**Features to Implement:**
+- Spawn subagents with minimal context
+- Route tasks to specialized agents (research, writer, critic, etc.)
+- Parse structured JSON responses
+- Integrate results back to main agent
+
+**Current State:**
+- ✅ `buildSubAgentPrompt()` with 5 roles defined
+- ❌ No spawning/routing logic
+- ❌ No execution framework
+
+---
+
+### 6. Web Dashboard UI ❌
+
+**Status:** Not implemented
+
+**What Needs to Be Built:**
+
+```text
+ui/
+├── components/       # React components
+│   ├── Chat.tsx
+│   ├── Canvas.tsx
+│   └── Sidebar.tsx
+├── hooks/            # WebSocket hooks
+└── pages/            # Next.js pages
+```
+
+**Features to Implement:**
+- React/Next.js frontend
+- WebSocket connection to gateway
+- Chat interface
+- "Canvas" view for side-by-side execution
+- Session management UI
+- Model/provider switching UI
+
+**Current State:**
+- ✅ TUI client (terminal-based)
+- ✅ WebSocket protocol ready
+- ❌ No web UI
+
+---
+
+### 7. Advanced Features ❌
+
+**Missing:**
+- ❌ BOOT.md hook execution (schema exists, not implemented)
+- ❌ "Budget/Power" mode toggle for model selection
+- ❌ Model tier routing (Gemini Flash Lite, GPT-5 Nano, DeepSeek)
+- ❌ Automatic fact extraction to FACTS.json
+- ❌ Shell history monitoring
+- ❌ Git event watching
+
+---
+
+## 📋 Implementation Priority
+
+### Phase 1: Proactive Intelligence (High Priority)
+1. **Shadow Loop** - Core watcher + heuristics
+2. **Ghost Messages** - Proactive notification system
+3. **Shell/Terminal Monitoring** - Error detection
+
+### Phase 2: Advanced Tools (Medium Priority)
+1. **Browser Automation** - Playwright integration
+2. **OS Tools** - Notifications, clipboard, screenshots
+3. **Subagent Framework** - Task delegation system
+
+### Phase 3: Long-term Memory (Medium Priority)
+1. **SQLite Database** - Persistent storage
+2. **Vector Embeddings** - Semantic search
+3. **Fact Extraction** - Automatic learning
+
+### Phase 4: UI & Polish (Low Priority)
+1. **Web Dashboard** - React/Next.js UI
+2. **Canvas View** - Side-by-side execution
+3. **Budget Mode** - Model tier selection
+
+---
+
+## 📊 Current Progress
+
+| Feature | Status |
+|---------|--------|
+| Core Agent Loop | ✅ Complete |
+| Memory System | ✅ Complete |
+| Basic Tools (File, Shell, Web, Memory) | ✅ Complete |
+| Multi-Channel (CLI, TUI, Telegram, WhatsApp) | ✅ Complete |
+| Service Management | ✅ Complete |
+| Provider Management | ✅ Complete |
+| **Shadow Loop** | ❌ Missing |
+| **Browser Tools** | ❌ Missing |
+| **OS Tools** | ❌ Missing |
+| **Vector/SQLite** | ❌ Missing |
+| **Subagent Framework** | ❌ Missing |
+| **Web UI** | ❌ Missing |
+
+**Overall: ~65% complete** - Foundation is solid, proactive intelligence layer is missing.
