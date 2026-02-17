@@ -9,6 +9,8 @@ import { registerShellTools } from './shell.js';
 import { registerMemoryTools } from './memory-tools.js';
 import { registerWebTools } from './web.js';
 import { registerBrowserTools } from './browser.js';
+import { notesTools } from './notes.js';
+import { tasksTools } from './tasks.js';
 import { logger } from '../utils/logger.js';
 
 export interface ToolDefinition {
@@ -63,6 +65,12 @@ export function registerAllTools(agentLoop: AgentLoop, config: TalonConfig): voi
             agentLoop.registerTool(tool);
             registered.push(tool.name);
         }
+    }
+
+    // Productivity tools (notes and tasks)
+    for (const tool of [...notesTools, ...tasksTools]) {
+        agentLoop.registerTool(tool);
+        registered.push(tool.name);
     }
 
     logger.info({ tools: registered, count: registered.length }, 'Tools registered');
