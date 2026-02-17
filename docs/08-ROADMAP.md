@@ -1,53 +1,80 @@
-# Talon — Implementation Roadmap
+# Talon — Missing Features Roadmap
 
-Phased delivery plan from MVP to full ecosystem.
-
----
-
-## Phase Overview
-
-```
-  Phase 1            Phase 2              Phase 3            Phase 4
-  Core MVP           Enhanced             Ecosystem          Polish
-  ──────────         ──────────           ──────────         ──────────
-  Gateway            Sub-agents           Skills system      macOS native app
-  Agent Loop         Browser control      WhatsApp/Slack     Voice input
-  Model Router       Shadow Loop          Docker sandbox     Canvas/A2UI
-  Memory Manager     Discord bot          Vector memory      iOS/Android nodes
-  File tools         WebChat UI           Cron/Webhooks      Window management
-  Shell tool         Control Panel UI     Plugin channels
-  Telegram bot       Soul evolution
-  CLI REPL           FACTS.json
-  SOUL.md            Audit logging
-```
+What's left to build to reach full ecosystem.
 
 ---
 
-## Phase 1: Core MVP
+## ✅ COMPLETE (Phase 1 & 2 - ~70%)
 
-> **Goal:** A working personal AI assistant with an agent loop, memory compression, and tool calling — the 3 things that make it feel like a real agent.
+### Core Foundation
+- ✅ Gateway Server (WebSocket + HTTP)
+- ✅ Config System (Zod validation, hot reload)
+- ✅ Agent Loop (plan→execute→evaluate)
+- ✅ Model Router (DeepSeek → OpenRouter → OpenAI)
+- ✅ Memory Manager (compression, ≤800 token summaries)
+- ✅ Tool Registry
+- ✅ File Tools (read, write, list, search)
+- ✅ Shell Tool (with safety)
+- ✅ Web Search (4 providers)
+- ✅ Memory Tools
+- ✅ Telegram Bot
+- ✅ WhatsApp Bot
+- ✅ CLI REPL
+- ✅ TUI Client
+- ✅ Service Management (LaunchAgent/systemd)
+- ✅ Provider Management
+- ✅ SOUL.md + FACTS.json
 
-### MVP Fast-Track (build these 3 things first)
+---
 
-| Component | Why It Matters |
-|---|---|
-| ✅ **Agent Loop** | The plan→execute→evaluate→refine cycle is what makes it feel intelligent |
-| ✅ **Memory Compression** | Without this, you'll hit millions of tokens per day and go broke |
-| ✅ **Tool Calling** | `file_read`, `shell_execute`, `web_search` — enough to be useful |
+## 🚧 MISSING FEATURES
 
-_"After that, you basically have OpenClaw."_
+### Phase 2: Enhanced Capabilities ❌
 
-### Full Phase 1 Deliverables
-
-| Component | Details | Priority |
+| Component | Status | Priority |
 |---|---|---|
-| **Gateway Server** | WebSocket + HTTP server on `127.0.0.1:19789` | P0 |
-| **Config System** | Load `~/.talon/config.json`, Zod validation, env var expansion | P0 |
-| **Agent Loop** | State machine: plan→decide→execute→evaluate→compress | P0 |
-| **Model Router** | Select cheapest capable model per task type | P0 |
-| **Memory Manager** | Compression, ≤800 token summaries, tool log truncation | P0 |
-| **Tool Registry** | Tool registration, dispatch, result formatting + truncation | P0 |
-| **File Tools** | `file_read`, `file_write`, `file_edit`, `file_list`, `file_search` | P0 |
+| **Subagents** | ❌ Prompts exist, no execution | P1 |
+| **Browser Control** | ❌ Schema exists, not implemented | P1 |
+| **Shadow Loop** | ❌ Schema exists, not implemented | P1 |
+| **Discord Bot** | ❌ Not implemented | P2 |
+| **WebChat UI** | ❌ Not implemented | P2 |
+| **Control Panel UI** | ❌ Not implemented | P2 |
+| **Soul Evolution** | ⚠️ Manual only, no auto-update | P2 |
+| **Audit Logging** | ⚠️ Basic logs, no structured audit | P2 |
+
+### Phase 3: Ecosystem ❌
+
+| Component | Status | Priority |
+|---|---|---|
+| **Skills System** | ⚠️ Loader exists, not integrated | P1 |
+| **Slack Channel** | ❌ Not implemented | P2 |
+| **Docker Sandbox** | ❌ Not implemented | P1 |
+| **Vector Memory** | ❌ Not implemented | P2 |
+| **Cron Scheduler** | ⚠️ Schema exists, not used | P2 |
+| **Webhooks** | ❌ Not implemented | P2 |
+| **Plugin Channels** | ⚠️ Plugin loader exists | P2 |
+
+### Phase 4: Polish ❌
+
+| Component | Status | Priority |
+|---|---|---|
+| **macOS Native App** | ❌ Not implemented | P3 |
+| **Voice Input** | ❌ Not implemented | P3 |
+| **Canvas/A2UI** | ❌ Not implemented | P3 |
+| **iOS Node** | ❌ Not implemented | P3 |
+| **Android Node** | ❌ Not implemented | P3 |
+| **Window Management** | ❌ Not implemented | P3 |
+
+---
+
+## 📊 Current Status
+
+**Phase 1:** ✅ 100% Complete  
+**Phase 2:** ⚠️ 20% Complete (missing subagents, browser, shadow loop, Discord, UIs)  
+**Phase 3:** ⚠️ 10% Complete (missing most ecosystem features)  
+**Phase 4:** ❌ 0% Complete (all polish features missing)
+
+**Overall Progress:** ~70% of core functionality, ~30% of full vision
 | **Shell Tool** | `shell_execute` with confirmation for destructive commands | P0 |
 | **Telegram Channel** | grammŸ bot, DM support, media handling | P0 |
 | **CLI Channel** | Interactive REPL with streaming + syntax highlighting | P0 |
