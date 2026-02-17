@@ -22,12 +22,17 @@ export async function startTUI(): Promise<void> {
 
     // Check if gateway is running
     try {
+        console.log(chalk.dim('  Connecting to gateway...'));
         const healthCheck = await fetch('http://127.0.0.1:19789/api/health');
         if (!healthCheck.ok) {
             console.log(chalk.red('✗ Gateway is not responding'));
             console.log(chalk.dim('  Run `talon service start` or `talon start --daemon`\n'));
             process.exit(1);
         }
+        
+        // Wait for gateway to be fully ready
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
     } catch {
         console.log(chalk.red('✗ Gateway is not running'));
         console.log(chalk.dim('  Run `talon service start` or `talon start --daemon`\n'));
