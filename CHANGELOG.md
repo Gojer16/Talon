@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ New Features
 
+#### Productivity Tools
+- **Notes System**:
+  - **notes_save**: Save notes with title, content, and tags to `~/.talon/workspace/notes/`
+  - **notes_search**: Search notes by keyword or tag with preview
+  - Markdown format with frontmatter metadata
+  
+- **Tasks System**:
+  - **tasks_add**: Add tasks with title, description, and priority (low/medium/high)
+  - **tasks_list**: List tasks filtered by status (pending/completed/all)
+  - **tasks_complete**: Mark tasks as completed by ID
+  - JSON storage with timestamps and IDs
+
+#### Apple Integrations (macOS)
+- **Apple Notes**:
+  - **apple_notes_create**: Create notes in Apple Notes app with folder support
+  - **apple_notes_search**: Search Apple Notes by keyword with preview
+  
+- **Apple Reminders**:
+  - **apple_reminders_add**: Add reminders with due dates and priority (0-9)
+  - **apple_reminders_list**: List reminders by list name with completion status
+  - **apple_reminders_complete**: Mark reminders as complete by title
+  
+- **Apple Calendar**:
+  - **apple_calendar_create_event**: Create events with date, time, location, and notes
+  - **apple_calendar_list_events**: List upcoming events (configurable days ahead)
+  - **apple_calendar_delete_event**: Delete events by title
+  - Auto-calculate end time (1 hour after start if not specified)
+  
+- **Native Integration**: Uses AppleScript for seamless macOS integration
+- **Auto-detection**: Only enabled on macOS (darwin platform)
+- **Auto-creation**: Creates "Talon" folder/list/calendar automatically
+
 #### Subagent System
 - **SubagentRegistry**: Manages specialized subagent instances
 - **5 Subagent Types**:
