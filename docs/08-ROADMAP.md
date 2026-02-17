@@ -4,43 +4,67 @@ What's left to build to reach full ecosystem.
 
 ---
 
-## ✅ COMPLETE (Phase 1 & 2 - ~75%)
+## ✅ COMPLETE (Phase 1 & 2 - ~85%)
 
 ### Core Foundation
 - ✅ Gateway Server (WebSocket + HTTP)
+- ✅ Enhanced Gateway (8-phase boot, session keys)
 - ✅ Config System (Zod validation, hot reload)
 - ✅ Agent Loop (plan→execute→evaluate)
 - ✅ Model Router (DeepSeek → OpenRouter → OpenAI)
+- ✅ Fallback System (automatic provider switching)
+- ✅ Context Guard (token management)
 - ✅ Memory Manager (compression, ≤800 token summaries)
 - ✅ Tool Registry
 - ✅ File Tools (read, write, list, search)
 - ✅ Shell Tool (with safety)
 - ✅ Web Search (4 providers)
 - ✅ Memory Tools
-- ✅ **Subagent System** (research, writer, planner, critic, summarizer)
+- ✅ **Browser Tools** (5 Puppeteer tools) ✅ NEW
+- ✅ **Notes Tools** (save, search) ✅ NEW
+- ✅ **Tasks Tools** (add, list, complete) ✅ NEW
+- ✅ **Apple Notes** (create, search) ✅ NEW
+- ✅ **Apple Reminders** (add, list, complete) ✅ NEW
+- ✅ **Apple Calendar** (create, list, delete) ✅ NEW
+- ✅ **Subagent System** (5 agents, 97% cost savings) ✅ NEW
+- ✅ **Shadow Loop** (proactive intelligence) ✅ NEW
+- ✅ **Plugin System** (dynamic loading) ✅ NEW
+- ✅ **Cron System** (job scheduling) ✅ NEW
+- ✅ **Protocol Layer** (gateway frames) ✅ NEW
 - ✅ Telegram Bot
 - ✅ WhatsApp Bot
 - ✅ CLI REPL
 - ✅ TUI Client
 - ✅ Service Management (LaunchAgent/systemd)
 - ✅ Provider Management
-- ✅ SOUL.md + FACTS.json
+- ✅ Health Checks (basic, deep, ready)
+- ✅ SOUL.md + FACTS.json + TOOLS.md
+
+**Stats:**
+- 70 source files
+- 26+ tools
+- 5 subagents
+- 8 Apple integrations
+- 323 tests (100% passing)
+- 3 channels
 
 ---
 
-## 🚧 MISSING FEATURES
+## 🚧 MISSING FEATURES (~15%)
 
-### Phase 2: Enhanced Capabilities ❌
+### Phase 2: Enhanced Capabilities
 
 | Component | Status | Priority |
 |---|---|---|
-| **Browser Control** | ❌ Schema exists, not implemented | P1 |
-| **Shadow Loop** | ❌ Schema exists, not implemented | P1 |
+| ~~**Browser Control**~~ | ✅ Complete (5 tools) | ~~P1~~ |
+| ~~**Shadow Loop**~~ | ✅ Complete (85.8% coverage) | ~~P1~~ |
 | **Discord Bot** | ❌ Not implemented | P2 |
 | **WebChat UI** | ❌ Not implemented | P2 |
 | **Control Panel UI** | ❌ Not implemented | P2 |
 | **Soul Evolution** | ⚠️ Manual only, no auto-update | P2 |
 | **Audit Logging** | ⚠️ Basic logs, no structured audit | P2 |
+| **Smart Routing** | ❌ No auto-detection | P2 |
+| **Budget Tracking** | ❌ No cost estimation UI | P2 |
 
 ### Phase 3: Ecosystem ❌
 

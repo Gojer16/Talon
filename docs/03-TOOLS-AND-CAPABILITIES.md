@@ -16,15 +16,31 @@ This document details every tool the agent can invoke, including parameters, ret
 │  │ (5 tools)│ │(1 tool) │ │(5 tools) │ │  (2 tools)   │ │
 │  └─────────┘ └─────────┘ └──────────┘ └──────────────┘ │
 │                                                          │
-│  ┌──────────┐ ┌──────────────┐                          │
-│  │   OS     │ │   Persona    │                          │
-│  │  Tools   │ │   Tools      │                          │
-│  │(3 tools) │ │  (1 tool)    │                          │
-│  └──────────┘ └──────────────┘                          │
+│  ┌──────────┐ ┌──────────────┐ ┌──────────────┐        │
+│  │   Web    │ │   Subagent   │ │ Productivity │        │
+│  │  Tools   │ │   Tools      │ │   Tools      │        │
+│  │(2 tools) │ │  (1 tool)    │ │  (5 tools)   │        │
+│  └──────────┘ └──────────────┘ └──────────────┘        │
 │                                                          │
-│  Total: 17 built-in tools                                │
+│  ┌──────────────┐                                        │
+│  │    Apple     │                                        │
+│  │    Tools     │                                        │
+│  │  (8 tools)   │                                        │
+│  └──────────────┘                                        │
+│                                                          │
+│  Total: 26+ built-in tools                               │
 └──────────────────────────────────────────────────────────┘
 ```
+
+**Tool Categories:**
+- **File Tools** (5) - Read, write, edit, list, search
+- **Shell Tools** (1) - Command execution
+- **Web Tools** (2) - Search, fetch
+- **Browser Tools** (5) - Navigate, click, type, screenshot, extract
+- **Memory Tools** (2) - Save facts, update soul
+- **Subagent Tools** (1) - Delegate to specialized agents
+- **Productivity Tools** (5) - Notes (2), Tasks (3)
+- **Apple Tools** (8) - Notes (2), Reminders (3), Calendar (3) - macOS only
 
 ---
 
