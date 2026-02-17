@@ -82,7 +82,7 @@ export async function startTUI(): Promise<void> {
             } else if (msg.type === 'tool.call') {
                 readline.clearLine(process.stdout, 0);
                 readline.cursorTo(process.stdout, 0);
-                console.log(chalk.dim(`  🛠️  Using ${msg.payload?.tool || msg.payload?.name}...`));
+                console.log(chalk.dim(`  🛠️  Using ${msg.payload?.toolCall?.name || 'tool'}...`));
             }
         } catch (err) {
             console.log(chalk.red('\n[ERROR] Parse error:'), err);
