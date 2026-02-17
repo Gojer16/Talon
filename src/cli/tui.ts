@@ -199,26 +199,22 @@ function handleSlashCommand(input: string, rl: readline.Interface, ws: WebSocket
             break;
 
         case 'provider':
+            // Close readline to prevent conflicts with inquirer
             rl.pause();
-            changeProvider().then(() => {
-                rl.resume();
-                rl.prompt();
-            }).catch(() => {
-                rl.resume();
-                rl.prompt();
+            process.stdin.setRawMode(false);
+            changeProvider().finally(() => {
+                // Don't resume - user needs to restart TUI after gateway restart anyway
             });
-            break;
+            return;
 
         case 'switch':
+            // Close readline to prevent conflicts with inquirer
             rl.pause();
-            switchModel().then(() => {
-                rl.resume();
-                rl.prompt();
-            }).catch(() => {
-                rl.resume();
-                rl.prompt();
+            process.stdin.setRawMode(false);
+            switchModel().finally(() => {
+                // Don't resume - user needs to restart TUI after gateway restart anyway
             });
-            break;
+            return;
 
         case 'status':
         case 'reset':
@@ -370,6 +366,8 @@ async function changeProvider(): Promise<void> {
         const configPath = path.join(os.homedir(), '.talon', 'config.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         
+        console.log(''); // Add spacing
+        
         const providerId = await select({
             message: 'Choose provider:',
             choices: PROVIDERS.filter(p => p.id !== 'anthropic' && p.id !== 'custom').map(p => ({
@@ -387,6 +385,8 @@ async function changeProvider(): Promise<void> {
             baseUrl: provider.baseUrl,
             models: provider.models.map(m => m.id),
         };
+        
+        console.log(''); // Add spacing before next prompt
         
         // Ask if they want to switch to this provider
         const switchNow = await confirm({
@@ -419,6 +419,8 @@ async function changeProvider(): Promise<void> {
             console.log(chalk.green(`✓ Switched to ${config.agent.model}`));
         }
         
+        console.log(''); // Add spacing before next prompt
+        
         // Auto-restart gateway
         const shouldRestart = await confirm({
             message: 'Restart gateway now?',
@@ -439,18 +441,25 @@ async function changeProvider(): Promise<void> {
                 // Wait for gateway to be ready
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 
-                console.log(chalk.green('  ✓ Ready! Continue chatting...\n'));
+                console.log(chalk.green('  ✓ Ready!'));
+                console.log(chalk.yellow('\n  Restart TUI to use new provider: /exit then talon tui\n'));
+                process.exit(0);
             } catch (err) {
                 console.log(chalk.red('  ✗ Failed to restart gateway'));
                 console.log(chalk.yellow('  Run manually: talon service restart\n'));
+                process.exit(1);
             }
         } else {
-            console.log(chalk.yellow('  Remember to restart: talon service restart\n'));
+            console.log(chalk.yellow('\n  Remember to restart gateway: talon service restart'));
+            console.log(chalk.yellow('  Then restart TUI: /exit then talon tui\n'));
+            process.exit(0);
         }
     } catch (err: any) {
         if (err.name !== 'ExitPromptError') {
             console.log(chalk.red('\n✗ Failed to change provider\n'));
+            process.exit(1);
         }
+        process.exit(0);
     }
 }
 
@@ -465,8 +474,10 @@ async function switchModel(): Promise<void> {
         const providers = Object.keys(config.agent.providers);
         if (providers.length === 0) {
             console.log(chalk.yellow('\n⚠ No providers configured. Use /provider first\n'));
-            return;
+            process.exit(0);
         }
+        
+        console.log(''); // Add spacing
         
         const providerId = await select({
             message: 'Choose provider:',
@@ -485,6 +496,8 @@ async function switchModel(): Promise<void> {
         
         console.log(chalk.green(`\n✓ Switched to ${config.agent.model}`));
         
+        console.log(''); // Add spacing before next prompt
+        
         // Auto-restart gateway
         const shouldRestart = await confirm({
             message: 'Restart gateway now?',
@@ -505,13 +518,18 @@ async function switchModel(): Promise<void> {
                 // Wait for gateway to be ready
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 
-                console.log(chalk.green('  ✓ Ready! Continue chatting...\n'));
+                console.log(chalk.green('  ✓ Ready!'));
+                console.log(chalk.yellow('\n  Restart TUI to use new model: /exit then talon tui\n'));
+                process.exit(0);
             } catch (err) {
                 console.log(chalk.red('  ✗ Failed to restart gateway'));
                 console.log(chalk.yellow('  Run manually: talon service restart\n'));
+                process.exit(1);
             }
         } else {
-            console.log(chalk.yellow('  Remember to restart: talon service restart\n'));
+            console.log(chalk.yellow('\n  Remember to restart gateway: talon service restart'));
+            console.log(chalk.yellow('  Then restart TUI: /exit then talon tui\n'));
+            process.exit(0);
         }
     } catch (err: any) {
         if (err.name !== 'ExitPromptError') {
