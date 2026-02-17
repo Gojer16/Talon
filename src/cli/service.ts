@@ -69,10 +69,18 @@ export function isServiceInstalled(): boolean {
 export function isServiceRunning(): boolean {
     try {
         if (process.platform === 'darwin') {
-            const result = execSync(`launchctl list | grep ${SERVICE_LABEL}`, { encoding: 'utf-8' });
-            return result.trim().length > 0;
+            const domain = `gui/${process.getuid?.() ?? 501}`;
+            const result = execSync(`launchctl print ${domain}/${SERVICE_LABEL}`, { 
+                encoding: 'utf-8',
+                stdio: 'pipe'
+            });
+            // Check if state is "running" or has a PID
+            return result.includes('state = running') || /pid = \d+/.test(result);
         } else if (process.platform === 'linux') {
-            const result = execSync('systemctl --user is-active talon.service', { encoding: 'utf-8' });
+            const result = execSync('systemctl --user is-active talon.service', { 
+                encoding: 'utf-8',
+                stdio: 'pipe'
+            });
             return result.trim() === 'active';
         }
     } catch {
@@ -96,37 +104,59 @@ export async function installService(runtime: 'node' | 'bun' = 'node'): Promise<
     try {
         const { dir, file } = getServicePaths();
         const executable = getTalonExecutable(runtime);
+        const config = getDaemonConfig();
 
         console.log(chalk.dim(`  Runtime: ${runtime}`));
 
-        // Ensure directory exists
+        // Ensure directories exist
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
+        
+        const logDir = path.dirname(config.logFile);
+        if (!fs.existsSync(logDir)) {
+            fs.mkdirSync(logDir, { recursive: true });
+        }
 
         // Generate service file
-        let content: string;
         if (process.platform === 'darwin') {
-            content = generateLaunchdPlist(executable);
-            fs.writeFileSync(file, content, 'utf-8');
+            const plistContent = generateLaunchdPlist(executable);
+            fs.writeFileSync(file, plistContent, 'utf-8');
             
-            // Load the service
-            console.log(chalk.dim('  Loading LaunchAgent...'));
-            execSync(`launchctl load ${file}`, { stdio: 'inherit' });
+            // Bootstrap the service (modern launchctl)
+            console.log(chalk.dim('  Bootstrapping LaunchAgent...'));
+            const uid = process.getuid?.() ?? 501;
+            const domain = `gui/${uid}`;
+            
+            try {
+                execSync(`launchctl bootstrap ${domain} ${file}`, { stdio: 'pipe' });
+            } catch (err) {
+                // Try legacy load command as fallback
+                console.log(chalk.dim('  Using legacy load command...'));
+                execSync(`launchctl load ${file}`, { stdio: 'pipe' });
+            }
+            
+            // Enable the service
+            try {
+                execSync(`launchctl enable ${domain}/${SERVICE_LABEL}`, { stdio: 'pipe' });
+            } catch {
+                // Ignore if enable fails (might not be needed)
+            }
             
         } else if (process.platform === 'linux') {
-            content = generateSystemdService(executable);
-            fs.writeFileSync(file, content, 'utf-8');
+            const serviceContent = generateSystemdService(executable);
+            fs.writeFileSync(file, serviceContent, 'utf-8');
             
             // Reload systemd and enable service
             console.log(chalk.dim('  Reloading systemd...'));
-            execSync('systemctl --user daemon-reload', { stdio: 'inherit' });
-            execSync('systemctl --user enable talon.service', { stdio: 'inherit' });
-            execSync('systemctl --user start talon.service', { stdio: 'inherit' });
+            execSync('systemctl --user daemon-reload', { stdio: 'pipe' });
+            execSync('systemctl --user enable talon.service', { stdio: 'pipe' });
+            execSync('systemctl --user start talon.service', { stdio: 'pipe' });
         }
 
         console.log(chalk.green('✓ Service installed successfully'));
         console.log(chalk.dim(`  Service file: ${file}`));
+        console.log(chalk.dim(`  Logs: ${config.logFile}`));
         console.log(chalk.dim('  Talon will now start automatically on login\n'));
         
     } catch (err) {
@@ -152,17 +182,25 @@ export async function uninstallService(): Promise<void> {
 
         // Stop and unload the service
         if (process.platform === 'darwin') {
-            console.log(chalk.dim('  Unloading LaunchAgent...'));
+            console.log(chalk.dim('  Stopping LaunchAgent...'));
+            const domain = `gui/${process.getuid?.() ?? 501}`;
+            
             try {
-                execSync(`launchctl unload ${file}`, { stdio: 'inherit' });
+                // Try modern bootout command
+                execSync(`launchctl bootout ${domain}/${SERVICE_LABEL}`, { stdio: 'pipe' });
             } catch {
-                // Ignore errors if already unloaded
+                // Fallback to legacy unload
+                try {
+                    execSync(`launchctl unload ${file}`, { stdio: 'pipe' });
+                } catch {
+                    // Ignore if already unloaded
+                }
             }
         } else if (process.platform === 'linux') {
             console.log(chalk.dim('  Stopping systemd service...'));
             try {
-                execSync('systemctl --user stop talon.service', { stdio: 'inherit' });
-                execSync('systemctl --user disable talon.service', { stdio: 'inherit' });
+                execSync('systemctl --user stop talon.service', { stdio: 'pipe' });
+                execSync('systemctl --user disable talon.service', { stdio: 'pipe' });
             } catch {
                 // Ignore errors if already stopped
             }
@@ -194,12 +232,25 @@ export async function restartService(): Promise<void> {
 
     try {
         if (process.platform === 'darwin') {
-            const { file } = getServicePaths();
             console.log(chalk.dim('  Restarting LaunchAgent...'));
-            execSync(`launchctl unload ${file} && launchctl load ${file}`, { stdio: 'inherit' });
+            const domain = `gui/${process.getuid?.() ?? 501}`;
+            
+            try {
+                // Try kickstart (modern way to restart)
+                execSync(`launchctl kickstart -k ${domain}/${SERVICE_LABEL}`, { stdio: 'pipe' });
+            } catch {
+                // Fallback: bootout + bootstrap
+                const { file } = getServicePaths();
+                try {
+                    execSync(`launchctl bootout ${domain}/${SERVICE_LABEL}`, { stdio: 'pipe' });
+                } catch {
+                    // Ignore if not loaded
+                }
+                execSync(`launchctl bootstrap ${domain} ${file}`, { stdio: 'pipe' });
+            }
         } else if (process.platform === 'linux') {
             console.log(chalk.dim('  Restarting systemd service...'));
-            execSync('systemctl --user restart talon.service', { stdio: 'inherit' });
+            execSync('systemctl --user restart talon.service', { stdio: 'pipe' });
         }
 
         console.log(chalk.green('✓ Service restarted successfully\n'));
