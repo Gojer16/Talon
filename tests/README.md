@@ -5,11 +5,23 @@
 ```bash
 npm test              # Run all tests
 npm run test:watch    # Watch mode
+npm run test:coverage # Run tests with coverage report
 ```
 
 ## Test Coverage
 
 ### ✅ All Tests Passing (196/196 - 100%)
+
+**Coverage Command:**
+```bash
+npm run test:coverage
+```
+
+Generates coverage reports in multiple formats:
+- Text summary in terminal
+- HTML report in `coverage/html/`
+- LCOV report in `coverage/lcov.info`
+- JSON summary in `coverage/coverage-summary.json`
 
 **Core Components (86 tests):**
 - Config Schema (5 tests) ✅
@@ -81,12 +93,34 @@ Tests for all tool implementations: file operations, shell execution, web search
 
 ## Next Steps
 
-- [ ] Implement subagent system (tests already written)
-- [ ] Add integration tests for agent loop
+- [x] Implement subagent system (tests already written)
+- [x] Add integration tests for agent loop
+- [x] Add coverage reporting
+- [x] Add CI/CD pipeline
 - [ ] Add integration tests for channels
 - [ ] Add E2E tests for full workflows
-- [ ] Add coverage reporting
-- [ ] Add CI/CD pipeline
+
+---
+
+## CI/CD Pipeline
+
+The project includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs:
+
+### Jobs:
+1. **Test & Coverage** - Runs all tests with coverage reporting
+2. **Lint** - TypeScript type checking
+3. **Build** - Compiles TypeScript to JavaScript
+4. **Release** - Creates GitHub releases on main branch pushes
+
+### Features:
+- Automatic coverage reporting via Codecov
+- PR comments with coverage summary
+- Artifact upload for built files
+- Secrets management for API keys
+
+### Environment Variables (GitHub Secrets):
+- `DEEPSEEK_API_KEY`
+- `OPENROUTER_API_KEY`
 
 ## Estimated Coverage
 

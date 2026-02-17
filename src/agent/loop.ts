@@ -49,6 +49,7 @@ export class AgentLoop {
     private maxIterations: number;
     private fallbackRouter: FallbackRouter;
     private sessionId: string | null = null;
+    private subagentRegistry?: any; // Will be set via setSubagentRegistry
 
     constructor(
         private modelRouter: ModelRouter,
@@ -59,6 +60,13 @@ export class AgentLoop {
     ) {
         this.maxIterations = options?.maxIterations ?? 10;
         this.fallbackRouter = options?.fallbackRouter ?? new FallbackRouter();
+    }
+
+    /**
+     * Set subagent registry for delegation.
+     */
+    setSubagentRegistry(registry: any): void {
+        this.subagentRegistry = registry;
     }
 
     /**

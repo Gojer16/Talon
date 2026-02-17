@@ -8,6 +8,7 @@ import { registerFileTools } from './file.js';
 import { registerShellTools } from './shell.js';
 import { registerMemoryTools } from './memory-tools.js';
 import { registerWebTools } from './web.js';
+import { registerBrowserTools } from './browser.js';
 import { logger } from '../utils/logger.js';
 
 export interface ToolDefinition {
@@ -53,6 +54,15 @@ export function registerAllTools(agentLoop: AgentLoop, config: TalonConfig): voi
     for (const tool of webTools) {
         agentLoop.registerTool(tool);
         registered.push(tool.name);
+    }
+
+    // Browser tools
+    if (config.tools.browser.enabled) {
+        const browserTools = registerBrowserTools(config);
+        for (const tool of browserTools) {
+            agentLoop.registerTool(tool);
+            registered.push(tool.name);
+        }
     }
 
     logger.info({ tools: registered, count: registered.length }, 'Tools registered');
