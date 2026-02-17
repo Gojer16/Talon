@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadConfig } from '../config/index.js';
+import inquirer from 'inquirer';
 
 const GATEWAY_URL = 'ws://127.0.0.1:19789/ws';
 
@@ -199,22 +199,17 @@ function handleSlashCommand(input: string, rl: readline.Interface, ws: WebSocket
             break;
 
         case 'provider':
-            // Close readline to prevent conflicts with inquirer
-            rl.pause();
-            process.stdin.setRawMode(false);
-            changeProvider().finally(() => {
-                // Don't resume - user needs to restart TUI after gateway restart anyway
-            });
-            return;
+            console.log(chalk.yellow('\n⚠ Run provider setup as a separate command:\n'));
+            console.log(chalk.dim('  $ talon setup\n'));
+            console.log(chalk.dim('  Or press Ctrl+C to exit and run: talon setup\n'));
+            rl.prompt();
+            break;
 
         case 'switch':
-            // Close readline to prevent conflicts with inquirer
-            rl.pause();
-            process.stdin.setRawMode(false);
-            switchModel().finally(() => {
-                // Don't resume - user needs to restart TUI after gateway restart anyway
-            });
-            return;
+            console.log(chalk.yellow('\n⚠ Model switching requires gateway restart.\n'));
+            console.log(chalk.dim('  Exit TUI and run: talon setup\n'));
+            rl.prompt();
+            break;
 
         case 'status':
         case 'reset':
@@ -272,14 +267,16 @@ function showHelp(): void {
     
     console.log(chalk.bold('System'));
     console.log('  /model      Show current model');
-    console.log('  /provider   Change AI provider');
-    console.log('  /switch     Switch model');
     console.log('  /exit       Exit Talon');
     console.log('  /quit       Alias for /exit');
     console.log('  /config     View current Talon configuration');
     console.log('  /memory     View recent memory entries');
     console.log('  /version    Show Talon version and info');
     console.log('  /debug      Toggle debug logging');
+    console.log('');
+    
+    console.log(chalk.bold('Configuration'));
+    console.log('  Run `talon setup` to change provider or model');
     console.log('');
     
     console.log(chalk.bold('Tools'));
