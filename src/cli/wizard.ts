@@ -326,7 +326,7 @@ async function stepGateway(): Promise<WizardResult['gateway']> {
         validate: (v) => {
             const n = parseInt(v, 10);
             if (isNaN(n) || n < 1 || n > 65535) return 'Must be a valid port (1-65535)';
-            return undefined;
+            return true;
         },
     });
 
