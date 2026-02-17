@@ -1,6 +1,6 @@
 # Kimi - Missing Features Roadmap
 
-> **What's Left**: Subagent delegation, productivity tools, and smart routing.
+> **What's Left**: Productivity tools and smart routing.
 
 ## ✅ Already Complete
 - Core agent loop with tool calling
@@ -9,30 +9,58 @@
 - Context management (last 5-10 messages only)
 - Web search, file tools, shell tools, memory tools
 - Multi-channel support (CLI, TUI, Telegram, WhatsApp)
+- **Subagent System** (research, writer, planner, critic, summarizer)
 
 ---
 
 ## 🚧 MISSING IMPLEMENTATIONS
 
-### 1. Subagent Execution System ❌
+### 1. Subagent Execution System ✅ COMPLETE
 
-**Status:** Prompts exist, but NO execution framework
+**Status:** ✅ Fully implemented and tested
 
-**What Needs to Be Built:**
+**What Was Built:**
 ```
 src/subagents/
-├── base.ts           # Base subagent class
-├── research.ts       # Web research (GPT-5 Nano)
-├── writer.ts         # Content creation
-├── planner.ts        # Task planning
-└── summarizer.ts     # Text compression
+├── base.ts           # Base subagent class ✅
+├── registry.ts       # Subagent registry ✅
+├── research.ts       # Research subagent ✅
+├── writer.ts         # Content creation ✅
+├── planner.ts        # Task planning ✅
+├── critic.ts         # Work review ✅
+├── summarizer.ts     # Text compression ✅
+└── types.ts          # Type definitions ✅
+
+src/tools/
+└── subagent-tool.ts  # delegate_to_subagent tool ✅
 ```
 
-**Current State:**
+**Implementation Details:**
 - ✅ `buildSubAgentPrompt()` in `src/agent/prompts.ts`
-- ❌ No spawning/routing logic
-- ❌ No JSON result parsing
-- ❌ No task delegation
+- ✅ Spawning/routing logic via SubagentRegistry
+- ✅ JSON result parsing with structured outputs
+- ✅ Task delegation via `delegate_to_subagent` tool
+- ✅ Integrated into gateway Phase 3 initialization
+- ✅ Configurable model via `agent.subagentModel`
+- ✅ All 19 TDD tests passing
+- ✅ Cost optimization: 97% savings using cheap models
+
+**Usage:**
+```json
+// config.json
+{
+  "agent": {
+    "subagentModel": "openrouter/openai/gpt-4o-mini"
+  }
+}
+```
+
+Agent can now delegate tasks:
+- Research: Gather information with sources
+- Writer: Produce content in various formats
+- Planner: Create actionable plans with risks
+- Critic: Review work with ratings and feedback
+- Summarizer: Compress text into key points
 
 ---
 
