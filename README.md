@@ -80,6 +80,12 @@ Talk to Talon wherever you are:
 ### CLI Features
 
 ```bash
+# Service Management
+talon service install    # Install as system service (LaunchAgent/systemd)
+talon service uninstall  # Remove service
+talon service restart    # Restart running service
+talon service status     # Check if installed/running
+
 # Interactive chat with slash commands
 You > /help
 🦅 Talon CLI Commands
@@ -181,7 +187,26 @@ You > /calc 15 * 3
 You > /echo Hello World!
 📢 Hello World!
 ```
+
+### 🚀 Boot Hook (BOOT.md)
+
+Run custom instructions on gateway startup:
+
+```markdown
+# ~/.talon/workspace/BOOT.md
+Good morning! Today is {{DATE}}.
+
+Please check:
+1. Any urgent notifications?
+2. What's on my calendar?
+3. Pending tasks from yesterday?
+
+If all clear, just say "All clear!"
 ```
+
+- Executes through agent loop with full tool access
+- Can send messages, run commands, check files
+- Enable in setup wizard or config: `hooks.bootMd.enabled: true`
 
 ### Security & Privacy
 

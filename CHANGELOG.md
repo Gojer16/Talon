@@ -5,6 +5,53 @@ All notable changes to Talon will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### 🎨 Setup Wizard Enhancements
+- **Talon Branding**: Changed emoji from 🦞 to 🦅 (Talon eagle)
+- **Timezone-Aware Greetings**: Shows "Good morning/afternoon/evening" based on local time
+- **Dynamic OpenRouter Models**: Fetches all 342+ models from OpenRouter API
+- **Cleaner UI**: Removed verbose descriptions from provider/model selections
+- **OpenClaw-Style Channel Selection**: Loop-based selection with visual indicators (○/●)
+- **Removed Discord**: Replaced with WhatsApp support
+
+### 🔧 Gateway Configuration
+- **Token Authentication**: Auto-generate 48-char hex tokens
+- **Bind Mode Selection**: Loopback (127.0.0.1) or All interfaces (0.0.0.0)
+- **Tailscale Support**: Config option for Tailscale exposure
+- **Config Backup**: Automatic `.bak` file creation before overwriting
+- **User Feedback**: Shows "✓ Updated ~/.talon/config.json" with backup info
+
+### 🚀 Boot-md Hook
+- **BOOT.md Execution**: Runs on gateway startup with full agent loop
+- **Tool Access**: Agent can use all tools during boot (files, shell, web, etc.)
+- **Date Placeholder**: `{{DATE}}` replaced with current date
+- **Template Included**: Example BOOT.md with usage tips
+- **Setup Integration**: Optional hook configuration in wizard (Step 6/8)
+
+### 📦 Service Management (Full Implementation)
+- **CLI Commands**:
+  - `talon service install` - Install as LaunchAgent (macOS) or systemd (Linux)
+  - `talon service uninstall` - Clean removal
+  - `talon service restart` - Restart running service
+  - `talon service status` - Check installed/running state
+  
+- **Runtime Selection**: Choose Node or Bun during installation
+- **Modern launchctl**: Uses `bootstrap`, `bootout`, `kickstart` commands
+- **Auto-start**: Service starts on login
+- **Auto-restart**: KeepAlive ensures service restarts on failure
+- **Setup Integration**: Service installation as final wizard step (Step 8/8)
+
+### 🐛 Bug Fixes
+- Fixed TypeScript validation error in wizard port input
+- Fixed LaunchAgent plist to use separate command and args array
+- Added timeouts to service restart to prevent hanging
+- Fixed getuid() TypeScript errors for cross-platform compatibility
+
+### 📝 Documentation
+- Updated README with service management commands
+- Added CHANGELOG entries for all new features
+
 ## [0.3.0] - 2026-02-17
 
 ### 🏗️ Enterprise Architecture Release
