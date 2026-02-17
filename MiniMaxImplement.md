@@ -1,8 +1,165 @@
-# MiniMax Technical Implementation Guide
+# MiniMax - Missing Features Roadmap
 
-This document outlines the technical architecture and implementation strategy for MiniMax, a personal AI assistant designed to provide comprehensive system integration and assistance. Drawing inspiration from OpenClaw's innovative approach to multi-channel AI assistance, MiniMax aims to deliver a deeply integrated, privacy-focused personal assistant that operates entirely on the user's local infrastructure while maintaining flexibility for various communication channels and interaction modalities.
+> **What's Left**: Discord channel, browser automation, WebChat UI, and mobile apps.
 
-The core philosophy behind MiniMax centers on user sovereignty and privacy. Unlike cloud-based AI assistants that necessarily transmit user data to external servers, MiniMax runs locally on the user's machine, maintaining complete control over data flow and system access. This architectural decision fundamentally shapes every aspect of the system design, from the gateway communication patterns to the tool execution model and persistent memory storage.
+## ✅ Already Complete (~70%)
+- Gateway with WebSocket server
+- Session management and routing
+- Agent runtime with Claude/OpenAI support
+- Memory compression
+- Multi-channel (Telegram, WhatsApp, CLI, TUI)
+- File, shell, web search tools
+- Configuration system with hot reload
+
+---
+
+## 🚧 MISSING IMPLEMENTATIONS
+
+### 1. Discord Channel Integration ❌
+
+**Status:** Not implemented
+
+**What Needs to Be Built:**
+```
+src/channels/discord/
+├── index.ts          # Discord bot using discord.js
+└── commands.ts       # Slash commands
+```
+
+**Features Needed:**
+- Bot authentication and connection
+- Text channel message handling
+- Direct message support
+- Thread support
+- Slash commands
+- Mention detection in groups
+
+---
+
+### 2. Browser Automation ❌
+
+**Status:** Not implemented
+
+**What Needs to Be Built:**
+```
+src/tools/browser.ts  # Puppeteer/Playwright integration
+```
+
+**Tools Needed:**
+- `browser_open` - Open URL
+- `browser_navigate` - Navigate to page
+- `browser_click` - Click element
+- `browser_type` - Type text
+- `browser_screenshot` - Capture screenshot
+- `browser_extract` - Extract page content
+
+---
+
+### 3. WebChat UI ❌
+
+**Status:** Not implemented
+
+**What Needs to Be Built:**
+```
+ui/chat/
+├── src/
+│   ├── components/
+│   │   ├── Chat.tsx
+│   │   ├── MessageList.tsx
+│   │   └── Input.tsx
+│   └── hooks/
+│       └── useWebSocket.ts
+```
+
+**Features Needed:**
+- React-based chat interface
+- WebSocket connection to gateway
+- Message history display
+- Real-time streaming responses
+- Session management UI
+
+---
+
+### 4. Mobile Apps ❌
+
+**Status:** Not implemented (Phase 3)
+
+**What Needs to Be Built:**
+- macOS menu bar app
+- iOS node with Canvas
+- Android node with Canvas
+
+---
+
+### 5. Voice Features ❌
+
+**Status:** Not implemented (Phase 3)
+
+**What Needs to Be Built:**
+- Voice Wake (wake word detection)
+- Talk Mode (push-to-talk)
+- Speech-to-text
+- Text-to-speech
+
+---
+
+### 6. Canvas Rendering ❌
+
+**Status:** Not implemented (Phase 3)
+
+**What Needs to Be Built:**
+- A2UI renderer integration
+- Canvas protocol
+- Interactive elements
+
+---
+
+### 7. Advanced Features ❌
+
+**Missing:**
+- ❌ Cron scheduling (schema exists, not used)
+- ❌ Webhooks
+- ❌ Tailscale integration for remote access
+- ❌ Slack channel
+- ❌ Signal channel
+- ❌ iMessage integration
+
+---
+
+## 📋 Implementation Priority
+
+### Phase 1: Core Channels (High Priority)
+1. Discord bot integration
+2. WebChat UI (React)
+
+### Phase 2: Browser Automation (Medium Priority)
+1. Puppeteer/Playwright integration
+2. Browser control tools
+
+### Phase 3: Advanced Features (Low Priority)
+1. Voice features
+2. Canvas rendering
+3. Mobile apps
+4. Additional channels (Slack, Signal)
+
+---
+
+## 📊 Current Progress: ~70% Complete
+
+**What Works:**
+- Gateway ✅
+- Agent loop ✅
+- Memory compression ✅
+- Telegram, WhatsApp, CLI, TUI ✅
+- File/shell/web tools ✅
+
+**What's Missing:**
+- Discord ❌
+- Browser automation ❌
+- WebChat UI ❌
+- Voice ❌
+- Canvas ❌
+- Mobile apps ❌
 
 ---
 

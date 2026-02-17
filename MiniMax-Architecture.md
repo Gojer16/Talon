@@ -1,8 +1,37 @@
-# MiniMax - Simplified Architecture (MVP)
+# MiniMax - Missing Features Roadmap
 
-## Overview
+> **What's Left**: Discord, browser automation, WebChat UI, and advanced features.
 
-This document outlines a minimal viable architecture for MiniMax based on OpenClaw's design, simplified for initial development.
+## ✅ Already Complete (~70%)
+- Gateway with WebSocket
+- Multi-channel (Telegram, WhatsApp, CLI, TUI)
+- Agent runtime with memory compression
+- File, shell, web search tools
+
+---
+
+## 🚧 MISSING FROM MVP
+
+### 1. Discord Channel ❌
+- Bot integration with discord.js
+- Text/DM/thread support
+- Slash commands
+
+### 2. Browser Automation ❌
+- Puppeteer/Playwright tools
+- Page navigation and interaction
+- Content extraction
+
+### 3. WebChat UI ❌
+- React-based chat interface
+- WebSocket connection
+- Real-time streaming
+
+### 4. Advanced Features (Phase 3) ❌
+- Voice Wake + Talk Mode
+- Canvas rendering (A2UI)
+- Mobile apps (macOS, iOS, Android)
+- Additional channels (Slack, Signal)
 
 ---
 
