@@ -39,6 +39,7 @@ const ProviderConfigSchema = z.object({
 
 const AgentSchema = z.object({
     model: z.string().default('deepseek/deepseek-chat'),
+    subagentModel: z.string().default('gpt-4o-mini'),
     providers: z.record(z.string(), ProviderConfigSchema).default({ deepseek: {} }),
     failover: z.array(z.string()).default([]),
     maxTokens: z.number().int().min(1).default(4096),

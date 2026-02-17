@@ -92,6 +92,10 @@ export class TalonGateway {
             { maxIterations: this.config.agent.maxIterations }
         );
         this.agentLoop.registerFallbackProviders();
+        
+        // Initialize subagents
+        await this.initializeSubagents();
+        
         registerAllTools(this.agentLoop, this.config);
 
         // Phase 4: Plugin System
@@ -183,6 +187,29 @@ export class TalonGateway {
 
         // Register built-in channels as plugins
         this.registerBuiltInChannels();
+    }
+
+    /**
+     * Initialize subagent system
+     */
+    private async initializeSubagents(): Promise<void> {
+        const { SubagentRegistry, ResearchSubagent, WriterSubagent, PlannerSubagent, CriticSubagent, SummarizerSubagent } = await import('../subagents/index.js');
+        const { createSubagentTool } = await import('../tools/subagent-tool.js');
+        
+        const registry = new SubagentRegistry();
+        const subagentModel = this.config.agent.subagentModel || 'gpt-4o-mini';
+        
+        // Register all subagents
+        registry.register('research', new ResearchSubagent(subagentModel, this.modelRouter));
+        registry.register('writer', new WriterSubagent(subagentModel, this.modelRouter));
+        registry.register('planner', new PlannerSubagent(subagentModel, this.modelRouter));
+        registry.register('critic', new CriticSubagent(subagentModel, this.modelRouter));
+        registry.register('summarizer', new SummarizerSubagent(subagentModel, this.modelRouter));
+        
+        // Register subagent tool
+        this.agentLoop.registerTool(createSubagentTool(registry));
+        
+        logger.info({ model: subagentModel }, 'Subagents initialized');
     }
 
     /**
