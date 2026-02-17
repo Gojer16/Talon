@@ -98,18 +98,21 @@ Usage: talon <command>
 
 Commands:
   setup     Run the onboarding wizard
+  tui       Connect to running gateway (interactive chat)
   start     Start the gateway server (add --daemon to run in background)
   stop      Stop a running daemon
   restart   Restart the daemon
   health    Check if the gateway is running
   status    Show detailed status and sessions
+  service   Manage system service (install/uninstall/restart/status)
 
 Examples:
   talon setup          # First-time setup
-  talon start         # Start with interactive CLI
+  talon tui            # Interactive chat (connect to gateway)
   talon start --daemon # Start as background service
+  talon service install # Install as system service
   talon health         # Quick health check
-  talon status        # Detailed status
+  talon status         # Detailed status
       `);
             break;
         }
@@ -181,6 +184,12 @@ Examples:
                     console.error('Usage: talon service <install|uninstall|restart|status>');
                     process.exit(1);
             }
+            break;
+        }
+
+        case 'tui': {
+            const { startTUI } = await import('./tui.js');
+            await startTUI();
             break;
         }
 
