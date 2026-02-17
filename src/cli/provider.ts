@@ -145,10 +145,18 @@ export async function addProvider(): Promise<void> {
     });
     
     if (switchNow) {
-        const defaultModel = models[0].id;
-        config.agent.model = providerId === 'deepseek' ? defaultModel : `${providerId}/${defaultModel}`;
+        // Let user choose model
+        const { modelId } = await inquirer.prompt({
+            type: 'list',
+            name: 'modelId',
+            message: 'Choose model:',
+            choices: models.map(m => ({ name: m.name, value: m.id })),
+            pageSize: 15,
+        });
+        
+        config.agent.model = providerId === 'deepseek' ? modelId : `${providerId}/${modelId}`;
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
-        console.log(chalk.green(`✓ Switched to ${config.agent.model}`));
+        console.log(chalk.green(`\n✓ Switched to ${config.agent.model}`));
     }
     
     // Restart gateway
