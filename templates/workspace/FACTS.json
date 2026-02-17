@@ -1,0 +1,19 @@
+{
+  "_comment": "TEMPLATE - Copy to ~/.talon/workspace/FACTS.json and personalize",
+  "_warning": "This file contains personal facts the AI learns about you - NEVER commit to git!",
+  
+  "user": {
+    "name": "User",
+    "preferences": {
+      "editor": null,
+      "shell": null,
+      "theme": "dark",
+      "language": null
+    }
+  },
+  "environment": {
+    "os": null,
+    "project_root": null
+  },
+  "learned_facts": []
+}

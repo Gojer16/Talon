@@ -1,3 +1,6 @@
+<!-- ⚠️  TEMPLATE FILE - Generic operating manual -->
+<!-- Copy to ~/.talon/workspace/AGENTS.md (customize if needed) -->
+
 # AGENTS
 
 This folder is home. Treat it that way.
