@@ -1,0 +1,8 @@
+{
+  "id": "example",
+  "name": "Example Skill",
+  "description": "Demonstrates skill command registration in Talon CLI",
+  "version": "1.0.0",
+  "author": "Talon Team",
+  "enabled": true
+}

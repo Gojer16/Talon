@@ -5,7 +5,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfig } from '../config/index.js';
+import { loadConfig, ConfigReloader } from '../config/index.js';
 import { EventBus } from './events.js';
 import { SessionManager } from './sessions.js';
 import { MessageRouter } from './router.js';
@@ -17,10 +17,11 @@ import { MemoryCompressor } from '../memory/compressor.js';
 import { registerAllTools } from '../tools/registry.js';
 import { CliChannel } from '../channels/cli/index.js';
 import { TelegramChannel } from '../channels/telegram/index.js';
+import { WhatsAppChannel } from '../channels/whatsapp/index.js';
 import { logger } from '../utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const WORKSPACE_TEMPLATE = path.resolve(__dirname, '../../workspace');
+const WORKSPACE_TEMPLATE = path.resolve(__dirname, '../../templates/workspace');
 
 // ─── Banner ───────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ function printBanner(): void {
     console.log(`
   ╔══════════════════════════════════════╗
   ║                                      ║
-  ║   🦅  T A L O N   v0.1.0            ║
+  ║   🦅  T A L O N   v0.2.1            ║
   ║                                      ║
   ║   Personal AI Assistant              ║
   ║   Inspired by OpenClaw               ║
@@ -72,6 +73,9 @@ async function boot(): Promise<void> {
         maxIterations: config.agent.maxIterations,
     });
 
+    // Register fallback providers for reliability
+    agentLoop.registerFallbackProviders();
+
     // Register tools
     registerAllTools(agentLoop, config);
 
@@ -110,7 +114,19 @@ async function boot(): Promise<void> {
                     // Get the last assistant message from session
                     const lastMsg = session.messages.filter(m => m.role === 'assistant').pop();
                     if (lastMsg?.content) {
-                        router.handleOutbound(sessionId, lastMsg.content);
+                        // Build outbound message with usage metadata
+                        const outbound = {
+                            sessionId,
+                            text: lastMsg.content,
+                            metadata: {
+                                usage: chunk.usage,
+                                provider: chunk.providerId,
+                                model: chunk.model,
+                            },
+                        };
+                        
+                        logger.info({ sessionId, usage: chunk.usage }, 'Emitting message.outbound with usage');
+                        eventBus.emit('message.outbound', { message: outbound, sessionId });
                     }
                 }
             }
@@ -119,12 +135,53 @@ async function boot(): Promise<void> {
             sessionManager.persistSession(session);
         } catch (err) {
             logger.error({ err, sessionId }, 'Agent loop error');
+            
+            // Extract a user-friendly error message
+            const rawError = err instanceof Error ? err.message : String(err);
+            let userMessage: string;
+            
+            // Provide helpful error messages based on error type
+            if (rawError.includes('tool_calls') && rawError.includes('tool messages')) {
+                userMessage = "I'm having trouble with the conversation context. Let me reset and try again. You can type `/reset` to clear the session if this continues.";
+            } else if (rawError.includes('billing') || rawError.includes('quota') || rawError.includes('insufficient')) {
+                userMessage = "It looks like there's an issue with your API key or quota. Please check your API key and try again.";
+            } else if (rawError.includes('429') || rawError.includes('rate limit')) {
+                userMessage = "I'm being rate limited. Please wait a moment and try again.";
+            } else if (rawError.includes('timeout') || rawError.includes('ETIMEDOUT')) {
+                userMessage = "The request timed out. The AI provider might be slow. Please try again.";
+            } else if (rawError.includes('network') || rawError.includes('ECONNREFUSED')) {
+                userMessage = "Network error. Please check your internet connection and try again.";
+            } else {
+                userMessage = "I'm sorry, something went wrong. Please try again or type `/reset` to start fresh.";
+            }
+            
+            // Create an outbound error message
+            const errorOutbound = {
+                sessionId,
+                text: userMessage,
+                metadata: {
+                    error: true,
+                    errorDetails: rawError,
+                },
+            };
+            
+            // Emit error message so CLI can display it
+            eventBus.emit('message.outbound', { message: errorOutbound, sessionId });
+            
+            // Also broadcast to WebSocket clients
             server.broadcastToSession(sessionId, {
                 id: `ws_${Date.now().toString(36)}`,
                 type: 'error',
                 timestamp: Date.now(),
-                payload: { error: err instanceof Error ? err.message : 'Unknown error' },
+                payload: { 
+                    error: userMessage,
+                    details: rawError,
+                    recoverable: true,
+                },
             });
+            
+            // Persist session even on error (keep conversation history)
+            sessionManager.persistSession(session);
         }
     });
 
@@ -142,6 +199,16 @@ async function boot(): Promise<void> {
     if (!hasProviders) {
         logger.warn('No LLM providers configured. Run `npm run setup` to configure one.');
     }
+
+    // 6b. Start config hot reload (if enabled)
+    const configReloader = new ConfigReloader();
+    configReloader.onReload(async (newConfig) => {
+        logger.info('Reloading configuration...');
+        // For now, just log - full hot reload would reinitialize components
+        // This is a placeholder for future component-specific reload
+        eventBus.emit('config.reload', { path: 'all' });
+    });
+    configReloader.start();
 
 
 
@@ -171,6 +238,13 @@ async function boot(): Promise<void> {
         } else {
             logger.warn('Telegram enabled but no bot token in config');
         }
+    }
+
+    if (config.channels.whatsapp?.enabled) {
+        const whatsapp = new WhatsAppChannel(config, eventBus, sessionManager, router);
+        await whatsapp.start();
+        channels.push(whatsapp);
+        logger.info('WhatsApp channel starting...');
     }
 
     // 8. Graceful shutdown
