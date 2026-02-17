@@ -9,38 +9,36 @@ npm run test:watch    # Watch mode
 
 ## Test Coverage
 
-### ✅ Passing Tests (18/39)
-- Memory Manager (7/7)
-- Event Bus (6/6)
-- Config Schema (4/5)
+### ✅ All Tests Passing (67/67 - 100%)
 
-### ❌ Failing Tests (21/39)
-- Context Guard (0/8) - Static methods not exported
-- Session Manager (1/13) - Requires config object
+**Unit Tests:**
+- Config Schema (5 tests) ✅
+- Memory Manager (7 tests) ✅
+- Context Guard (9 tests) ✅
+- Event Bus (6 tests) ✅
+- Fallback System (9 tests) ✅
+- Session Manager (11 tests) ✅
+- Model Router (9 tests) ✅
+- Prompts (11 tests) ✅
 
-## Test Structure
+## Coverage by Component
 
-```
-tests/
-├── unit/                    # Unit tests
-│   ├── config-schema.test.ts
-│   ├── context-guard.test.ts
-│   ├── event-bus.test.ts
-│   ├── memory-manager.test.ts
-│   └── session-manager.test.ts
-└── integration/             # Integration tests (TODO)
-```
-
-## Known Issues
-
-1. **Context Guard** - Methods are not static, need instance
-2. **Session Manager** - Requires TalonConfig in constructor
-3. **Config Schema** - One validation test needs adjustment
+| Component | Tests | Status |
+|-----------|-------|--------|
+| Config System | 5 | ✅ 100% |
+| Memory Manager | 7 | ✅ 100% |
+| Context Guard | 9 | ✅ 100% |
+| Event Bus | 6 | ✅ 100% |
+| Fallback System | 9 | ✅ 100% |
+| Session Manager | 11 | ✅ 100% |
+| Model Router | 9 | ✅ 100% |
+| Prompts | 11 | ✅ 100% |
+| **Total** | **67** | **✅ 100%** |
 
 ## Next Steps
 
-- [ ] Fix Context Guard tests (use instance methods)
-- [ ] Fix Session Manager tests (provide mock config)
-- [ ] Add integration tests
+- [ ] Add integration tests for agent loop
+- [ ] Add integration tests for tools
+- [ ] Add integration tests for channels
 - [ ] Add coverage reporting
 - [ ] Add CI/CD pipeline

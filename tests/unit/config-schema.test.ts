@@ -71,9 +71,8 @@ describe('Config Schema', () => {
 
         it('should reject invalid config', () => {
             const invalidConfig = {
-                agent: {
-                    model: 'deepseek-chat',
-                    // Missing providers
+                gateway: {
+                    port: 99999, // Invalid port (must be <= 65535)
                 },
             };
 

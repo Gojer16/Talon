@@ -1,36 +1,68 @@
 // ─── Session Manager Tests ────────────────────────────────────────
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SessionManager } from '@/gateway/sessions.js';
+import { EventBus } from '@/gateway/events.js';
+import type { TalonConfig } from '@/config/schema.js';
 
 describe('SessionManager', () => {
     let sessionManager: SessionManager;
+    let mockConfig: TalonConfig;
+    let eventBus: EventBus;
 
     beforeEach(() => {
-        sessionManager = new SessionManager();
+        // Create mock config
+        mockConfig = {
+            agent: {
+                model: 'deepseek-chat',
+                providers: {
+                    deepseek: {
+                        apiKey: 'test-key',
+                        models: ['deepseek-chat'],
+                    },
+                },
+            },
+            memory: {
+                session: {
+                    idleTimeout: 300000, // 5 minutes
+                },
+            },
+        } as TalonConfig;
+
+        eventBus = new EventBus();
+        sessionManager = new SessionManager(mockConfig, eventBus);
     });
 
     describe('createSession', () => {
         it('should create a new session', () => {
-            const session = sessionManager.createSession('test-channel', 'user-123');
+            const session = sessionManager.createSession('user-123', 'test-channel');
             
             expect(session.id).toBeDefined();
-            expect(session.channelId).toBe('test-channel');
-            expect(session.userId).toBe('user-123');
+            expect(session.senderId).toBe('user-123');
+            expect(session.channel).toBe('test-channel');
             expect(session.messages).toEqual([]);
             expect(session.memorySummary).toBe('');
         });
 
         it('should generate unique session IDs', () => {
-            const session1 = sessionManager.createSession('channel-1', 'user-1');
-            const session2 = sessionManager.createSession('channel-2', 'user-2');
+            const session1 = sessionManager.createSession('user-1', 'channel-1');
+            const session2 = sessionManager.createSession('user-2', 'channel-2');
             
             expect(session1.id).not.toBe(session2.id);
+        });
+
+        it('should emit session.created event', () => {
+            const handler = vi.fn();
+            eventBus.on('session.created', handler);
+
+            sessionManager.createSession('user-123', 'test-channel');
+
+            expect(handler).toHaveBeenCalledOnce();
         });
     });
 
     describe('getSession', () => {
         it('should retrieve existing session', () => {
-            const created = sessionManager.createSession('test-channel', 'user-123');
+            const created = sessionManager.createSession('user-123', 'test-channel');
             const retrieved = sessionManager.getSession(created.id);
             
             expect(retrieved).toBeDefined();
@@ -43,93 +75,64 @@ describe('SessionManager', () => {
         });
     });
 
-    describe('getOrCreateSession', () => {
-        it('should create session if not exists', () => {
-            const session = sessionManager.getOrCreateSession('channel-1', 'user-1');
+    describe('getSessionBySender', () => {
+        it('should retrieve session by sender ID', () => {
+            const created = sessionManager.createSession('user-123', 'test-channel');
+            const retrieved = sessionManager.getSessionBySender('user-123');
             
-            expect(session).toBeDefined();
-            expect(session.channelId).toBe('channel-1');
-            expect(session.userId).toBe('user-1');
+            expect(retrieved).toBeDefined();
+            expect(retrieved?.id).toBe(created.id);
         });
 
-        it('should return existing session for same channel+user', () => {
-            const session1 = sessionManager.getOrCreateSession('channel-1', 'user-1');
-            const session2 = sessionManager.getOrCreateSession('channel-1', 'user-1');
-            
-            expect(session1.id).toBe(session2.id);
-        });
-
-        it('should create different sessions for different users', () => {
-            const session1 = sessionManager.getOrCreateSession('channel-1', 'user-1');
-            const session2 = sessionManager.getOrCreateSession('channel-1', 'user-2');
-            
-            expect(session1.id).not.toBe(session2.id);
+        it('should return undefined for unknown sender', () => {
+            const retrieved = sessionManager.getSessionBySender('unknown');
+            expect(retrieved).toBeUndefined();
         });
     });
 
-    describe('addMessage', () => {
-        it('should add message to session', () => {
-            const session = sessionManager.createSession('test-channel', 'user-123');
-            
-            sessionManager.addMessage(session.id, {
-                role: 'user',
-                content: 'Hello',
-                timestamp: new Date(),
-            });
-
-            const updated = sessionManager.getSession(session.id);
-            expect(updated?.messages.length).toBe(1);
-            expect(updated?.messages[0].content).toBe('Hello');
-        });
-
-        it('should update lastActivity timestamp', () => {
-            const session = sessionManager.createSession('test-channel', 'user-123');
-            const originalTime = session.lastActivity;
-            
-            // Wait a bit
-            setTimeout(() => {
-                sessionManager.addMessage(session.id, {
-                    role: 'user',
-                    content: 'Hello',
-                    timestamp: new Date(),
-                });
-
-                const updated = sessionManager.getSession(session.id);
-                expect(updated?.lastActivity.getTime()).toBeGreaterThan(originalTime.getTime());
-            }, 10);
-        });
-    });
-
-    describe('listSessions', () => {
+    describe('getAllSessions', () => {
         it('should return all sessions', () => {
-            sessionManager.createSession('channel-1', 'user-1');
-            sessionManager.createSession('channel-2', 'user-2');
-            sessionManager.createSession('channel-3', 'user-3');
+            sessionManager.createSession('user-1', 'channel-1');
+            sessionManager.createSession('user-2', 'channel-2');
+            sessionManager.createSession('user-3', 'channel-3');
 
-            const sessions = sessionManager.listSessions();
+            const sessions = sessionManager.getAllSessions();
             expect(sessions.length).toBe(3);
         });
 
         it('should return empty array when no sessions', () => {
-            const sessions = sessionManager.listSessions();
+            const sessions = sessionManager.getAllSessions();
             expect(sessions).toEqual([]);
         });
     });
 
-    describe('deleteSession', () => {
-        it('should delete existing session', () => {
-            const session = sessionManager.createSession('test-channel', 'user-123');
+    describe('resolveSession', () => {
+        it('should create new session for new sender', () => {
+            const msg = {
+                senderId: 'user-123',
+                channel: 'test-channel',
+                content: 'Hello',
+                isGroup: false,
+            };
+
+            const session = sessionManager.resolveSession(msg);
             
-            sessionManager.deleteSession(session.id);
-            
-            const retrieved = sessionManager.getSession(session.id);
-            expect(retrieved).toBeUndefined();
+            expect(session).toBeDefined();
+            expect(session.senderId).toBe('user-123');
         });
 
-        it('should not throw when deleting non-existent session', () => {
-            expect(() => {
-                sessionManager.deleteSession('non-existent');
-            }).not.toThrow();
+        it('should return existing session for known sender', () => {
+            const msg = {
+                senderId: 'user-123',
+                channel: 'test-channel',
+                content: 'Hello',
+                isGroup: false,
+            };
+
+            const session1 = sessionManager.resolveSession(msg);
+            const session2 = sessionManager.resolveSession(msg);
+            
+            expect(session1.id).toBe(session2.id);
         });
     });
 });
