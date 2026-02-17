@@ -1,8 +1,8 @@
 # Talon Features Catalog
 
-**Version:** 0.3.0  
-**Total Lines of Code:** ~8,500 TypeScript  
-**Source Files:** 40  
+**Version:** 0.3.1  
+**Total Lines of Code:** ~12,000 TypeScript  
+**Source Files:** 70  
 **Documentation Files:** 11  
 
 This document provides a comprehensive inventory of all features, capabilities, and components in Talon.
