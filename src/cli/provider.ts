@@ -97,6 +97,20 @@ export async function addProvider(): Promise<void> {
         apiKey = newKey;
     }
 
+    // Fetch OpenRouter models if needed
+    let models = provider.models;
+    if (providerId === 'openrouter') {
+        console.log(chalk.dim('  Fetching OpenRouter models...'));
+        const { fetchOpenRouterModels } = await import('./providers.js');
+        const openrouterModels = await fetchOpenRouterModels(apiKey);
+        if (openrouterModels.length > 0) {
+            console.log(chalk.green(`  ✓ Found ${openrouterModels.length} models\n`));
+            models = openrouterModels;
+        } else {
+            console.log(chalk.yellow('  ⚠ Could not fetch models, using defaults\n'));
+        }
+    }
+
     // Update config
     const configPath = path.join(os.homedir(), '.talon', 'config.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
@@ -104,7 +118,7 @@ export async function addProvider(): Promise<void> {
     config.agent.providers[providerId] = {
         apiKey: `\${${provider.envVar}}`,
         baseUrl: provider.baseUrl,
-        models: provider.models.map(m => m.id),
+        models: models.map(m => m.id),
     };
 
     // Update env
@@ -131,7 +145,7 @@ export async function addProvider(): Promise<void> {
     });
     
     if (switchNow) {
-        const defaultModel = provider.models[0].id;
+        const defaultModel = models[0].id;
         config.agent.model = providerId === 'deepseek' ? defaultModel : `${providerId}/${defaultModel}`;
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
         console.log(chalk.green(`✓ Switched to ${config.agent.model}`));
