@@ -45,7 +45,7 @@ export function fuzzySearch<T>(
     score: result.score || 0,
     matches: (result.matches || []).map(match => ({
       key: match.key || '',
-      indices: match.indices || [],
+      indices: (match.indices || []) as [number, number][],
     })),
   }));
 }

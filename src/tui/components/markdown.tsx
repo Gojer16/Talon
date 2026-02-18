@@ -47,7 +47,7 @@ function parseMarkdown(content: string): ParsedNode[] {
         break;
         
       case 'list':
-        const items = token.items.map(item => `• ${item.text}`).join('\n');
+        const items = token.items.map((item: any) => `• ${item.text}`).join('\n');
         nodes.push({
           type: 'list',
           content: items,
