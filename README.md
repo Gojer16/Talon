@@ -328,8 +328,12 @@ If all clear, just say "All clear!"
 - **Local First** — Everything runs on your machine
 - **Secure Config** — API keys in `.env`, never committed
 - **Data Separation** — Personal data in `~/.talon/` (gitignored)
+- **Template System** — Clean templates with frontmatter, user data isolated
+- **Workspace Isolation** — Templates in `templates/workspace/`, user data in `~/.talon/workspace/`
 - **Authorization** — Whitelist users/channels per platform
 - **Sandboxing** — Optional Docker sandbox for dangerous operations
+
+**🔐 Important**: Your personal data (name, memories, AI personality) is stored in `~/.talon/workspace/` and **never committed to git**. See [Security Guide](docs/REPOSITORY_SECURITY.md) for details.
 
 ---
 
