@@ -8,6 +8,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import inquirer from 'inquirer';
+import { formatAIResponse } from '../channels/cli/utils.js';
 
 const GATEWAY_URL = 'ws://127.0.0.1:19789/ws';
 
@@ -87,10 +88,11 @@ export async function startTUI(): Promise<void> {
             } else if (msg.type === 'agent.response.end') {
                 readline.clearLine(process.stdout, 0);
                 readline.cursorTo(process.stdout, 0);
-                
+
                 if (responseBuffer) {
+                    const formattedResponse = formatAIResponse(responseBuffer);
                     console.log(chalk.gray('╭─ Talon ─────────────────────'));
-                    console.log(chalk.gray('│ ') + responseBuffer);
+                    console.log(chalk.gray('│ ') + formattedResponse);
                     console.log(chalk.gray('╰─────────────────────────────'));
                 }
                 
