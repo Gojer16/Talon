@@ -13,6 +13,20 @@ export interface ProviderDef {
 
 export const PROVIDERS: ProviderDef[] = [
     {
+        id: 'opencode',
+        name: 'OpenCode (Free Models)',
+        envVar: 'OPENCODE_API_KEY',
+        baseUrl: 'https://opencode.ai/zen/v1',
+        apiType: 'openai-compatible',
+        models: [
+            { id: 'minimax-m2.5-free', name: 'MiniMax M2.5 Free', isDefault: true },
+            { id: 'big-pickle', name: 'Big Pickle Free' },
+            { id: 'glm-5-free', name: 'GLM 5 Free' },
+            { id: 'kimi-k2.5-free', name: 'Kimi K2.5 Free' },
+        ],
+        description: '100% FREE models — no API key required, perfect for unlimited usage',
+    },
+    {
         id: 'deepseek',
         name: 'DeepSeek API',
         envVar: 'DEEPSEEK_API_KEY',
