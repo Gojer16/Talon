@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { render } from 'ink-testing-library';
 import { UserMessage } from '@/tui/components/message-user.js';
 import { AssistantMessage } from '@/tui/components/message-assistant.js';
+import { ToolCard } from '@/tui/components/tool-card.js';
 
 describe('Message Components', () => {
   describe('UserMessage', () => {
@@ -20,5 +21,33 @@ describe('Message Components', () => {
       expect(lastFrame()).toContain('Hi there!');
       expect(lastFrame()).toContain('Talon');
     });
+  });
+});
+
+describe('ToolCard', () => {
+  it('should render tool call', () => {
+    const { lastFrame } = render(
+      <ToolCard 
+        toolName="file_read"
+        args={{ path: "config.json" }}
+        status="pending"
+      />
+    );
+    expect(lastFrame()).toContain('file_read');
+    expect(lastFrame()).toContain('config.json');
+  });
+
+  it('should show success result', () => {
+    const { lastFrame } = render(
+      <ToolCard 
+        toolName="file_read"
+        args={{ path: "config.json" }}
+        status="success"
+        result="{ content: 'test' }"
+        duration={120}
+      />
+    );
+    expect(lastFrame()).toContain('✅');
+    expect(lastFrame()).toContain('120ms');
   });
 });
