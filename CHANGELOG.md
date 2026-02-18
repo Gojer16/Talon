@@ -7,13 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+#### Critical: Agent Memory/Identity Loading
+- **Problem**: Agent forgets who you are on new TUI sessions, asks "Who am I? Who are you?" even though USER.md and IDENTITY.md contain your information
+- **Root Cause**: MemoryManager cached SOUL.md once in constructor, system prompt never refreshed with USER.md/IDENTITY.md on new sessions
+- **Solution**: Load ALL workspace files (SOUL.md, USER.md, IDENTITY.md, MEMORY.md) fresh on EVERY message, matching OpenClaw's behavior
+- **Files Modified**: 
+  - `src/memory/manager.ts` - Removed cached `soul` field, load fresh in `buildContext()`
+  - `src/agent/prompts.ts` - Added debug logging for loaded files with status tracking
+- **Impact**: Agent now always knows who you are, file updates take effect immediately without restart
+- **Tests**: All 323 tests passing, verification script added (`scripts/verify-memory-fix.js`)
+- **Documentation**: `BUGFIX-SUMMARY.md`, `BUGFIX-MEMORY-IDENTITY-COMPLETE.md`
+
 ### ✨ Added
+
+#### Daily Memory Loading
+- **Daily Memory Loader**: New `src/memory/daily.ts` module loads `memory/YYYY-MM-DD.md` files
+- **Auto-Loading**: Loads today and yesterday's daily memories automatically on every message
+- **Location**: Daily memories stored in `~/.talon/workspace/memory/YYYY-MM-DD.md`
+- **Chronological Order**: Yesterday's memories loaded first, then today's
+- **Auto-Directory Creation**: Creates `memory/` directory if it doesn't exist
+
+#### Proactive User Recognition
+- **Name Extraction**: Automatically extracts user's name from USER.md
+- **Casual Greeting**: Agent greets user by name on first message (e.g., "Hey Orlando! Ready to crush some goals? 🚀")
+- **No More "Who are you?"**: Agent now recognizes returning users immediately
+- **System Prompt Integration**: Greeting instruction added to system prompt dynamically
 
 #### TUI Response Formatting
 - **Clean AI Output**: Removes ugly `**` markdown bold syntax from AI responses
 - **Colored Bullets**: Converts `-` bullet points to cyan `•` for better readability
 - **formatAIResponse()**: New utility function in `src/channels/cli/utils.ts`
 - **Automatic Formatting**: All AI responses are automatically formatted before display
+- **Memory Loading Indicator**: TUI now shows "Loading memory files..." on startup
 
 ### 🔧 Changed
 - **TUI Display**: AI responses now render cleaner without markdown artifacts
