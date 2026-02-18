@@ -78,12 +78,26 @@ export function registerAllTools(agentLoop: AgentLoop, config: TalonConfig): voi
     }
 
     // Apple integrations (macOS only)
+    logger.debug({ platform: process.platform, isDarwin: process.platform === 'darwin' }, 'Checking platform for Apple tools');
     if (process.platform === 'darwin') {
+        logger.info('macOS detected - registering Apple tools');
+        logger.debug({ 
+            notesCount: appleNotesTools.length,
+            remindersCount: appleRemindersTools.length,
+            calendarCount: appleCalendarTools.length,
+            safariCount: appleSafariTools.length
+        }, 'Apple tool counts');
+        
         for (const tool of [...appleNotesTools, ...appleRemindersTools, ...appleCalendarTools, ...appleSafariTools]) {
             agentLoop.registerTool(tool);
             registered.push(tool.name);
+            logger.debug({ toolName: tool.name }, 'Registered Apple tool');
         }
-        logger.info('Apple integrations enabled (macOS detected)');
+        logger.info({ 
+            totalAppleTools: appleNotesTools.length + appleRemindersTools.length + appleCalendarTools.length + appleSafariTools.length 
+        }, 'Apple integrations enabled');
+    } else {
+        logger.warn({ platform: process.platform }, 'Not macOS - skipping Apple tools');
     }
 
     logger.info({ tools: registered, count: registered.length }, 'Tools registered');
