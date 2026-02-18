@@ -42,10 +42,41 @@ Talk to Talon wherever you are:
 
 | Channel | Status | Features |
 |---------|--------|----------|
-| **💻 CLI** | ✅ Enhanced | Interactive terminal with slash commands, bash execution, skill command registration, command suggestions, better help formatting |
+| **💻 CLI** | ✅ Enhanced | Interactive terminal with Ink-based TUI, real-time streaming, tool visualization |
 | **📱 WhatsApp** | ✅ Ready | Full WhatsApp Web integration, QR auth, groups |
 | **✈️ Telegram** | ✅ Ready | Bot integration, polling, user/group authorization |
-| **🌐 Web UI** | 🚧 Planned | Browser dashboard (coming in v0.3.0) |
+| **🌐 Web UI** | 🚧 Planned | Browser dashboard (coming in v0.4.0) |
+
+### 🎨 Enhanced TUI (NEW!)
+
+**Ink-Based Terminal Interface:**
+
+```bash
+talon tui-new    # New Ink-based TUI (recommended)
+talon tui        # Legacy readline TUI
+```
+
+**Features:**
+- 🎨 Component-based UI with React (Ink)
+- 📊 Real-time streaming with smooth updates
+- 🛠️  Rich tool visualization (expandable results)
+- 🎯 Model picker with fuzzy search (Ctrl+O)
+- 💬 Session picker with history (Ctrl+P)
+- 🎨 Syntax-highlighted code blocks
+- ⌨️  Advanced keyboard shortcuts
+- 📈 Token usage display
+- 🎭 Beautiful markdown rendering
+
+**Keyboard Shortcuts:**
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+O` | Open model picker |
+| `Ctrl+P` | Open session picker |
+| `Ctrl+T` | Toggle tools expanded |
+| `Ctrl+L` | Clear screen |
+| `Ctrl+D` | Exit |
+| `Ctrl+C` | Cancel/Interrupt |
+| `Escape` | Close overlay |
 
 ### 🏗️ Core Architecture
 
