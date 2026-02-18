@@ -1,6 +1,6 @@
 // ─── Enhanced CLI Channel ─────────────────────────────────────────
 // Interactive REPL with slash commands and bash support
-// Enhanced with features from openclaw TUI
+// Uses the SHARED TerminalRenderer — all display logic lives there.
 
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
@@ -10,6 +10,7 @@ import type { AgentChunk } from '../../agent/loop.js';
 import { logger } from '../../utils/logger.js';
 import { createBuiltinCommands, parseCommand, isBangLine, parseBangLine, type CommandContext } from './commands.js';
 import { initializeSkills } from '../../skills/loader.js';
+import { TerminalRenderer } from './renderer.js';
 import chalk from 'chalk';
 
 export class CliChannel extends BaseChannel {
@@ -21,7 +22,7 @@ export class CliChannel extends BaseChannel {
     private commands = createBuiltinCommands();
     private currentStream: AsyncIterable<AgentChunk> | null = null;
     private logLevel = 'info';
-    private currentModel = 'unknown';
+    private renderer: TerminalRenderer | null = null;
 
     // Get command context for passing to handlers
     private getCommandContext(): CommandContext {
@@ -76,6 +77,12 @@ export class CliChannel extends BaseChannel {
             completer: (line: string) => this.completer(line),
         });
 
+        // ─── Shared Renderer (single source of truth for display) ─────
+        this.renderer = new TerminalRenderer(
+            () => this.prompt(),
+            { currentModel: this.config.agent.model },
+        );
+
         // Print Welcome Banner
         this.printBanner();
 
@@ -91,9 +98,6 @@ export class CliChannel extends BaseChannel {
             }
         }
         this.sessionId = session.id;
-
-        // Set initial model from config
-        this.currentModel = this.config.agent.model;
 
         // Setup event listeners
         this.setupEventListeners();
@@ -122,43 +126,67 @@ export class CliChannel extends BaseChannel {
         console.log(chalk.bold.hex('#FF6B35')('  🦅 Welcome to Talon'));
         console.log(chalk.gray('  Your Personal AI Assistant'));
         console.log('');
-        
+
         // Show current model
         const modelName = this.config.agent.model.split('/').pop() || this.config.agent.model;
         console.log(chalk.dim(`  Model: ${chalk.yellow(modelName)}`));
         console.log('');
-        
+
         console.log(chalk.dim('  Type /help for commands or just start chatting!'));
         console.log('');
     }
 
     private setupEventListeners(): void {
-        // Listen for outbound messages
+        // Listen for outbound messages → convert to RenderChunks
         this.eventBus.on('message.outbound', (params: { sessionId: string; message: OutboundMessage }) => {
-            if (params.sessionId === this.sessionId) {
-                this.printResponse(params.message);
+            if (params.sessionId !== this.sessionId) return;
+
+            const message = params.message;
+            const isError = message.metadata?.error === true;
+
+            if (isError) {
+                this.renderer?.handleChunk({
+                    type: 'error',
+                    content: message.text,
+                });
+            } else {
+                // Emit text then done — renderer handles all display
+                this.renderer?.handleChunk({
+                    type: 'text',
+                    content: message.text,
+                });
+                this.renderer?.handleChunk({
+                    type: 'done',
+                    model: message.metadata?.model as string | undefined,
+                    providerId: message.metadata?.provider as string | undefined,
+                    usage: message.metadata?.usage as any,
+                });
             }
         });
 
-        // Tool execution feedback
+        // Tool execution feedback → render as tool_call chunk
         this.eventBus.on('tool.execute', (params) => {
-            if (params.sessionId === this.sessionId) {
-                process.stdout.write('\r\x1b[K'); // Clear line
-                console.log(chalk.gray(`  🛠️  Using ${params.tool}...`));
-            }
+            if (params.sessionId !== this.sessionId) return;
+            this.renderer?.handleChunk({
+                type: 'tool_call',
+                toolCall: {
+                    id: '',
+                    name: params.tool,
+                    args: params.args ?? {},
+                },
+            });
         });
 
-        // Agent thinking indicator
+        // Agent thinking indicator → render as thinking chunk
         this.eventBus.on('agent.thinking', (params) => {
-            if (params.sessionId === this.sessionId) {
-                process.stdout.write(chalk.gray('  🤔 Thinking...\r'));
-            }
+            if (params.sessionId !== this.sessionId) return;
+            this.renderer?.handleChunk({ type: 'thinking' });
         });
 
         // Track model usage
         this.eventBus.on('agent.model.used', (params) => {
-            if (params.sessionId === this.sessionId && params.model) {
-                this.currentModel = params.model;
+            if (params.sessionId === this.sessionId && params.model && this.renderer) {
+                this.renderer.currentModel = params.model;
             }
         });
     }
@@ -199,13 +227,13 @@ export class CliChannel extends BaseChannel {
 
         if (!command) {
             console.log(chalk.red(`  Unknown command: /${parsed.name}`));
-            
+
             // Show command suggestions
             const suggestions = this.commands.getCommandSuggestions(parsed.name);
             if (suggestions.length > 0) {
                 console.log(chalk.dim(`  Did you mean: ${suggestions.map(c => `/${c}`).join(', ')}?`));
             }
-            
+
             console.log(chalk.dim('  Type /help for all available commands'));
             this.prompt();
             return;
@@ -221,7 +249,7 @@ export class CliChannel extends BaseChannel {
         try {
             const context = this.getCommandContext();
             const result = await command.handler(parsed.args, session, context);
-            
+
             // Handle clear screen
             if (result.shouldClear) {
                 console.clear();
@@ -229,7 +257,7 @@ export class CliChannel extends BaseChannel {
                 this.prompt();
                 return;
             }
-            
+
             // Print result with color coding
             switch (result.type) {
                 case 'success':
@@ -259,9 +287,9 @@ export class CliChannel extends BaseChannel {
 
     private async handleBangCommand(text: string): Promise<void> {
         const command = parseBangLine(text);
-        
+
         console.log(chalk.gray(`  $ ${command}`));
-        
+
         return new Promise((resolve) => {
             const [cmd, ...args] = command.split(' ');
             const child = spawn(cmd, args, {
@@ -290,47 +318,6 @@ export class CliChannel extends BaseChannel {
         await this.ingestMessage('user', 'User', text);
     }
 
-    private printResponse(message: OutboundMessage): void {
-        // Clear thinking indicator if present
-        process.stdout.write('\r\x1b[K');
-        
-        // Check if this is an error message
-        const isError = message.metadata?.error === true;
-        
-        // Use different styling for errors vs normal responses
-        const prefix = isError 
-            ? chalk.yellow('⚠️  Talon > ') 
-            : chalk.green('🦅 Talon > ');
-        const cleanText = this.formatResponse(message.text);
-        
-        console.log('');
-        console.log(prefix + cleanText);
-        
-        // Show model indicator
-        const modelName = this.currentModel.split('/').pop() || this.currentModel;
-        console.log(chalk.dim(`  [${chalk.yellow(modelName)}]`));
-        
-        // Show error details in debug mode
-        if (isError && message.metadata?.errorDetails) {
-            console.log(chalk.gray(`  🔧 ${String(message.metadata.errorDetails).substring(0, 100)}...`));
-        }
-        
-        console.log('');
-        this.prompt();
-    }
-
-    private formatResponse(text: string): string {
-        return text
-            .replace(/\*\*([^*]+)\*\*/g, chalk.bold('$1'))
-            .replace(/\*([^*]+)\*/g, chalk.italic('$1'))
-            .replace(/`([^`]+)`/g, chalk.yellow('$1'))
-            .replace(/```[\s\S]*?```/g, (match) => {
-                // Keep code blocks but dim them
-                return chalk.dim(match);
-            })
-            .trim();
-    }
-
     private completer(line: string): [string[], string] {
         const completions = this.commands.list().map(cmd => `/${cmd.name}`);
         const hits = completions.filter(c => c.startsWith(line));
@@ -346,6 +333,7 @@ export class CliChannel extends BaseChannel {
     public async stop(): Promise<void> {
         this.isShutdown = true;
         this.isStarted = false;
+        this.renderer?.reset();
         this.rl?.close();
         this.rl = null;
     }

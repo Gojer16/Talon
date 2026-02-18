@@ -1,5 +1,6 @@
 // ─── TUI Client ───────────────────────────────────────────────────
-// Connect to running gateway and provide interactive chat interface
+// Connect to running gateway and provide interactive chat interface.
+// Uses the SHARED TerminalRenderer — all display logic lives there.
 
 import WebSocket from 'ws';
 import readline from 'node:readline';
@@ -8,7 +9,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import inquirer from 'inquirer';
-import { formatAIResponse } from '../channels/cli/utils.js';
+import { TerminalRenderer, wsMessageToChunk } from '../channels/cli/renderer.js';
 
 const GATEWAY_URL = 'ws://127.0.0.1:19789/ws';
 
@@ -30,10 +31,10 @@ export async function startTUI(): Promise<void> {
             console.log(chalk.dim('  Run `talon service start` or `talon start --daemon`\n'));
             process.exit(1);
         }
-        
+
         // Wait for gateway to be fully ready
         await new Promise(resolve => setTimeout(resolve, 1500));
-        
+
     } catch {
         console.log(chalk.red('✗ Gateway is not running'));
         console.log(chalk.dim('  Run `talon service start` or `talon start --daemon`\n'));
@@ -43,7 +44,7 @@ export async function startTUI(): Promise<void> {
     // Show status indicators
     const configPath = path.join(os.homedir(), '.talon', 'config.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    
+
     console.log(chalk.green('✓ Connected to gateway'));
     console.log(chalk.yellow('⚡ Model: ') + chalk.dim(config.agent.model));
     console.log(chalk.blue('📍 Workspace: ') + chalk.dim(config.workspace.root));
@@ -57,65 +58,25 @@ export async function startTUI(): Promise<void> {
         prompt: chalk.cyan('You > '),
     });
 
-    let isWaitingForResponse = false;
-    let responseBuffer = '';
+    // ─── Shared Renderer (single source of truth for display) ─────
+    const renderer = new TerminalRenderer(
+        () => rl.prompt(),
+        { currentModel: config.agent.model },
+    );
 
     ws.on('open', () => {
         rl.prompt();
     });
 
+    // ─── Message Handler ─────────────────────────────────────────
+    // Convert WebSocket messages → RenderChunks → pass to renderer.
+    // NO display logic here — it all lives in TerminalRenderer.
     ws.on('message', (data: Buffer) => {
         try {
             const msg = JSON.parse(data.toString());
-
-            if (msg.type === 'agent.response') {
-                const payload = msg.payload;
-
-                if (payload?.type === 'text') {
-                    readline.clearLine(process.stdout, 0);
-                    readline.cursorTo(process.stdout, 0);
-                    responseBuffer += payload.content;
-                } else if (payload?.type === 'thinking') {
-                    readline.clearLine(process.stdout, 0);
-                    readline.cursorTo(process.stdout, 0);
-                    process.stdout.write(chalk.dim(`  ⏳ Talon is thinking...`));
-                } else if (payload?.type === 'error') {
-                    readline.clearLine(process.stdout, 0);
-                    readline.cursorTo(process.stdout, 0);
-                    console.log(chalk.red('❌ Error: ') + payload.content);
-                    isWaitingForResponse = false;
-                    rl.prompt();
-                }
-            } else if (msg.type === 'agent.response.end') {
-                readline.clearLine(process.stdout, 0);
-                readline.cursorTo(process.stdout, 0);
-
-                if (responseBuffer) {
-                    const formattedResponse = formatAIResponse(responseBuffer);
-                    console.log(chalk.gray('╭─ Talon ─────────────────────'));
-                    console.log(chalk.gray('│ ') + formattedResponse);
-                    console.log(chalk.gray('╰─────────────────────────────'));
-                }
-                
-                responseBuffer = '';
-                console.log('');
-                isWaitingForResponse = false;
-                rl.prompt();
-            } else if (msg.type === 'tool.call') {
-                readline.clearLine(process.stdout, 0);
-                readline.cursorTo(process.stdout, 0);
-                const toolName = msg.payload?.toolCall?.name || 'tool';
-                const toolArgs = msg.payload?.toolCall?.args;
-                let toolInfo = toolName;
-                
-                if (toolArgs?.path) {
-                    const fileName = path.basename(toolArgs.path);
-                    toolInfo = `${toolName} → ${fileName}`;
-                } else if (toolArgs?.query) {
-                    toolInfo = `${toolName} → ${toolArgs.query.substring(0, 30)}...`;
-                }
-                
-                console.log(chalk.dim(`  🛠️  ${toolInfo}`));
+            const chunk = wsMessageToChunk(msg);
+            if (chunk) {
+                renderer.handleChunk(chunk);
             }
         } catch (err) {
             console.log(chalk.red('\n[ERROR] Parse error:'), err);
@@ -132,6 +93,7 @@ export async function startTUI(): Promise<void> {
         process.exit(0);
     });
 
+    // ─── User Input ──────────────────────────────────────────────
     rl.on('line', (line: string) => {
         const input = line.trim();
 
@@ -150,36 +112,14 @@ export async function startTUI(): Promise<void> {
         if (input.startsWith('!')) {
             const command = input.slice(1);
             console.log(chalk.dim(`$ ${command}`));
-            ws.send(JSON.stringify({
-                type: 'channel.message',
-                payload: {
-                    channel: 'tui',
-                    senderId: 'tui-user',
-                    senderName: 'TUI User',
-                    text: `Execute this shell command: ${command}`,
-                    media: null,
-                    isGroup: false,
-                    groupId: null,
-                },
-            }));
-            isWaitingForResponse = true;
+            sendToGateway(ws, `Execute this shell command: ${command}`);
+            renderer.startWaiting();
             return;
         }
 
         // Send regular message
-        ws.send(JSON.stringify({
-            type: 'channel.message',
-            payload: {
-                channel: 'tui',
-                senderId: 'tui-user',
-                senderName: 'TUI User',
-                text: input,
-                media: null,
-                isGroup: false,
-                groupId: null,
-            },
-        }));
-        isWaitingForResponse = true;
+        sendToGateway(ws, input);
+        renderer.startWaiting();
     });
 
     rl.on('close', () => {
@@ -194,6 +134,25 @@ export async function startTUI(): Promise<void> {
         rl.close();
     });
 }
+
+// ─── Gateway Communication ───────────────────────────────────────
+
+function sendToGateway(ws: WebSocket, text: string): void {
+    ws.send(JSON.stringify({
+        type: 'channel.message',
+        payload: {
+            channel: 'tui',
+            senderId: 'tui-user',
+            senderName: 'TUI User',
+            text,
+            media: null,
+            isGroup: false,
+            groupId: null,
+        },
+    }));
+}
+
+// ─── Slash Commands ──────────────────────────────────────────────
 
 function handleSlashCommand(input: string, rl: readline.Interface, ws: WebSocket): void {
     const [cmd, ...args] = input.slice(1).split(' ');
@@ -252,18 +211,7 @@ function handleSlashCommand(input: string, rl: readline.Interface, ws: WebSocket
         case 'memory':
         case 'debug':
             // Send to agent
-            ws.send(JSON.stringify({
-                type: 'channel.message',
-                payload: {
-                    channel: 'tui',
-                    senderId: 'tui-user',
-                    senderName: 'TUI User',
-                    text: input,
-                    media: null,
-                    isGroup: false,
-                    groupId: null,
-                },
-            }));
+            sendToGateway(ws, input);
             break;
 
         default:
@@ -272,6 +220,8 @@ function handleSlashCommand(input: string, rl: readline.Interface, ws: WebSocket
             rl.prompt();
     }
 }
+
+// ─── UI Helpers ──────────────────────────────────────────────────
 
 function printBanner(): void {
     console.log(chalk.cyan(`
@@ -288,7 +238,7 @@ function printBanner(): void {
 function showHelp(): void {
     console.log(chalk.bold.cyan('\n🦅 Talon CLI Commands'));
     console.log(chalk.dim('──────────────────────────────────────────────────\n'));
-    
+
     console.log(chalk.bold('Session'));
     console.log('  /help       Show available commands');
     console.log('  /status     Show session status and token usage');
@@ -297,7 +247,7 @@ function showHelp(): void {
     console.log('  /compact    Force memory compression');
     console.log('  /tokens     Show estimated token usage');
     console.log('');
-    
+
     console.log(chalk.bold('System'));
     console.log('  /model      Show current model');
     console.log('  /exit       Exit Talon');
@@ -307,15 +257,15 @@ function showHelp(): void {
     console.log('  /version    Show Talon version and info');
     console.log('  /debug      Toggle debug logging');
     console.log('');
-    
+
     console.log(chalk.bold('Configuration'));
     console.log('  Run `talon setup` to change provider or model');
     console.log('');
-    
+
     console.log(chalk.bold('Tools'));
     console.log('  /clear    Clear screen (keep history)');
     console.log('');
-    
+
     console.log(chalk.bold('Shell'));
     console.log('  /!<command>    Execute bash command (e.g., !ls, !pwd)');
     console.log('');
@@ -326,7 +276,7 @@ function showModel(): void {
         const configPath = path.join(os.homedir(), '.talon', 'config.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         const providerIds = Object.keys(config.agent.providers);
-        
+
         console.log(chalk.cyan('\n🤖 Current Model'));
         console.log(`  Model:     ${config.agent.model}`);
         console.log(`  Providers: ${providerIds.join(', ')}`);
@@ -341,7 +291,7 @@ function showConfig(): void {
     try {
         const configPath = path.join(os.homedir(), '.talon', 'config.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        
+
         console.log(chalk.cyan('\n⚙️  Talon Configuration'));
         console.log(chalk.dim('────────────────────────'));
         console.log(`  Workspace:   ${config.workspace}`);
@@ -370,7 +320,7 @@ function showVersion(): void {
         const hours = Math.floor(uptime / 3600);
         const minutes = Math.floor((uptime % 3600) / 60);
         const uptimeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-        
+
         console.log(chalk.cyan('\n🦅 Talon'));
         console.log(chalk.dim('────────'));
         console.log(`  Version:   ${pkg.version}`);
@@ -391,11 +341,11 @@ async function changeProvider(): Promise<void> {
     const inquirer = await import('inquirer');
     const { PROVIDERS } = await import('./providers.js');
     const { execSync } = await import('node:child_process');
-    
+
     try {
         const configPath = path.join(os.homedir(), '.talon', 'config.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        
+
         const providerId = await inquirer.default.prompt({
             type: 'list',
             name: 'providerId',
@@ -405,28 +355,28 @@ async function changeProvider(): Promise<void> {
                 value: p.id,
             })),
         });
-        
+
         const provider = PROVIDERS.find(p => p.id === providerId.providerId)!;
         const apiKey = await inquirer.default.prompt({
             type: 'password',
             name: 'apiKey',
             message: `Enter ${provider.name} API key:`,
         });
-        
+
         // Update config
         config.agent.providers[providerId.providerId] = {
             apiKey: apiKey.apiKey,
             baseUrl: provider.baseUrl,
             models: provider.models.map(m => m.id),
         };
-        
+
         const switchNow = await inquirer.default.prompt({
             type: 'confirm',
             name: 'switch',
             message: 'Switch to this provider now?',
             default: true,
         });
-        
+
         if (switchNow.switch) {
             const defaultModel = provider.models[0].id;
             // Don't prefix if already has provider prefix
@@ -436,48 +386,48 @@ async function changeProvider(): Promise<void> {
                 config.agent.model = providerId.providerId === 'deepseek' ? defaultModel : `${providerId.providerId}/${defaultModel}`;
             }
         }
-        
+
         // Update env
         const envPath = path.join(os.homedir(), '.talon', '.env');
         let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
         const envVar = provider.envVar;
         const regex = new RegExp(`^${envVar}=.*$`, 'm');
-        
+
         if (regex.test(envContent)) {
             envContent = envContent.replace(regex, `${envVar}=${apiKey.apiKey}`);
         } else {
             envContent += `\n${envVar}=${apiKey.apiKey}\n`;
         }
-        
+
         fs.writeFileSync(envPath, envContent, 'utf-8');
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
-        
+
         console.log(chalk.green(`\n✓ Provider ${provider.name} configured`));
         if (switchNow.switch) {
             console.log(chalk.green(`✓ Switched to ${config.agent.model}`));
         }
-        
+
         const shouldRestart = await inquirer.default.prompt({
             type: 'confirm',
             name: 'restart',
             message: 'Restart gateway now?',
             default: true,
         });
-        
+
         if (shouldRestart.restart) {
             console.log(chalk.dim('\n  Restarting gateway...'));
             try {
                 const cliPath = path.join(process.cwd(), 'dist', 'cli', 'index.js');
-                execSync(`${process.execPath} ${cliPath} service restart`, { 
+                execSync(`${process.execPath} ${cliPath} service restart`, {
                     stdio: 'pipe',
                     timeout: 10000,
                 });
                 console.log(chalk.green('  ✓ Gateway restarted'));
                 console.log(chalk.dim('  Waiting for gateway...'));
-                
+
                 // Wait for gateway to be ready
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                
+
                 console.log(chalk.green('  ✓ Ready!'));
                 console.log(chalk.yellow('\n  Restart TUI to use new provider: /exit then talon tui\n'));
                 process.exit(0);
@@ -502,58 +452,58 @@ async function changeProvider(): Promise<void> {
 async function switchModel(): Promise<void> {
     const { select, confirm } = await import('@inquirer/prompts');
     const { execSync } = await import('node:child_process');
-    
+
     try {
         const configPath = path.join(os.homedir(), '.talon', 'config.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        
+
         const providers = Object.keys(config.agent.providers);
         if (providers.length === 0) {
             console.log(chalk.yellow('\n⚠ No providers configured. Use /provider first\n'));
             process.exit(0);
         }
-        
+
         console.log(''); // Add spacing
-        
+
         const providerId = await select({
             message: 'Choose provider:',
             choices: providers.map(p => ({ name: p, value: p })),
         });
-        
+
         const models = config.agent.providers[providerId].models || [];
         const modelId = await select({
             message: 'Choose model:',
             choices: models.map((m: string) => ({ name: m, value: m })),
         });
-        
+
         // Update model
         config.agent.model = providerId === 'deepseek' ? modelId : `${providerId}/${modelId}`;
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
-        
+
         console.log(chalk.green(`\n✓ Switched to ${config.agent.model}`));
-        
+
         console.log(''); // Add spacing before next prompt
-        
+
         // Auto-restart gateway
         const shouldRestart = await confirm({
             message: 'Restart gateway now?',
             default: true,
         });
-        
+
         if (shouldRestart) {
             console.log(chalk.dim('\n  Restarting gateway...'));
             try {
                 const cliPath = path.join(process.cwd(), 'dist', 'cli', 'index.js');
-                execSync(`${process.execPath} ${cliPath} service restart`, { 
+                execSync(`${process.execPath} ${cliPath} service restart`, {
                     stdio: 'pipe',
                     timeout: 10000,
                 });
                 console.log(chalk.green('  ✓ Gateway restarted'));
                 console.log(chalk.dim('  Waiting for gateway...'));
-                
+
                 // Wait for gateway to be ready
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                
+
                 console.log(chalk.green('  ✓ Ready!'));
                 console.log(chalk.yellow('\n  Restart TUI to use new model: /exit then talon tui\n'));
                 process.exit(0);
