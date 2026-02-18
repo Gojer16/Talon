@@ -4,7 +4,7 @@
 
 Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt from scratch as a privacy-first, single-user AI assistant with proactive intelligence.
 
-**Version:** 0.3.1  
+**Version:** 0.3.3  
 **Status:** Production-ready with Shadow Loop, subagents, browser control, productivity tools & full system access
 
 ---
@@ -192,6 +192,9 @@ talon tui                # Connect to running gateway with beautiful interface
     🛠️  file_read → IDENTITY.md
   ╭─ Talon ─────────────────────
   │ Hey! 👋 How can I help?
+  │ 
+  │ • Clean formatting (no ** markdown)
+  │ • Colored bullet points for readability
   ╰─────────────────────────────
   
   # Slash commands
@@ -261,7 +264,7 @@ You > /clear
 
 ╔══════════════════════════════════════╗
 ║                                      ║
-║   🦅  T A L O N   v0.3.0            ║
+║   🦅  T A L O N   v0.3.3            ║
 ║                                      ║
 ║   Personal AI Assistant              ║
 ║   Inspired by OpenClaw               ║
@@ -277,7 +280,7 @@ You > /clear
 # • Generic fallback message for other errors
 ╔══════════════════════════════════════╗
 ║                                      ║
-║   🦅  T A L O N   v0.3.0            ║
+║   🦅  T A L O N   v0.3.3            ║
 ║                                      ║
 ║   Personal AI Assistant              ║
 ║   Inspired by OpenClaw               ║
@@ -432,7 +435,7 @@ TALON_TOKEN=your-auth-token
 |----------|-------------|
 | [Vision](docs/00-VISION.md) | Project identity and principles |
 | [Architecture](docs/01-ARCHITECTURE.md) | System design and data flow |
-| [Architecture Enhancements](docs/ARCHITECTURE_ENHANCEMENTS.md) | **🏗️ v0.3.0 architecture overview** |
+| [Architecture Enhancements](docs/ARCHITECTURE_ENHANCEMENTS.md) | **🏗️ v0.3.3 architecture overview** |
 | [Components](docs/02-COMPONENTS.md) | Detailed component specs |
 | [Tools](docs/03-TOOLS-AND-CAPABILITIES.md) | All 17+ built-in tools |
 | [Channels](docs/04-CHANNELS-AND-INTERFACES.md) | Channel configuration |
@@ -447,7 +450,7 @@ TALON_TOKEN=your-auth-token
 
 ---
 
-## 🏗️ Architecture (v0.3.0)
+## 🏗️ Architecture (v0.3.3)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -552,7 +555,7 @@ npm start -- --port 8080 # Custom port
 
 ## 🗺️ Roadmap
 
-### ✅ v0.3.0 (Current) - Enterprise Architecture
+### ✅ v0.3.3 (Current) - Enterprise Architecture
 - **Protocol Layer** - Structured message protocol with Zod validation
 - **Session Key System** - Sophisticated session identification and management
 - **Plugin Architecture** - Dynamic loading, channel plugins, tool extensions
