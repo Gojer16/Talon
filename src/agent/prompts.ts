@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { loadDailyMemories, extractUserName } from '../memory/daily.js';
 
 const TALON_HOME = path.join(os.homedir(), '.talon');
 
@@ -64,7 +65,8 @@ function resolveWorkspacePath(workspaceRoot: string, file: string): string {
 function loadWorkspaceFile(workspaceRoot: string, file: string): string | null {
     const filePath = resolveWorkspacePath(workspaceRoot, file);
     if (fs.existsSync(filePath)) {
-        return fs.readFileSync(filePath, 'utf-8');
+        const content = fs.readFileSync(filePath, 'utf-8');
+        return content;
     }
     return null;
 }
@@ -120,6 +122,9 @@ You can save notes, manage tasks, create calendar events, and delegate specializ
 /**
  * Build the main agent system prompt.
  * Injects SOUL.md + USER.md + IDENTITY.md + workspace context.
+ * 
+ * IMPORTANT: This is called on EVERY message to ensure fresh workspace files are loaded.
+ * This matches OpenClaw's behavior where the agent always knows who you are.
  */
 export function buildSystemPrompt(
     soul: string,
@@ -127,8 +132,10 @@ export function buildSystemPrompt(
     workspaceRoot?: string,
 ): string {
     let prompt = soul;
+    
+    const loadedFiles: Array<{ name: string; chars: number; status: string }> = [];
+    loadedFiles.push({ name: 'SOUL.md', chars: soul.length, status: 'loaded' });
 
-    // Inject user context if available
     // Inject user context if available
     if (workspaceRoot) {
         const bootstrap = isBootstrapNeeded(workspaceRoot);
@@ -136,6 +143,8 @@ export function buildSystemPrompt(
         if (bootstrap) {
             const bootstrapContent = loadBootstrap(workspaceRoot);
             if (bootstrapContent) {
+                loadedFiles.push({ name: 'BOOTSTRAP.md', chars: bootstrapContent.length, status: 'loaded' });
+                
                 // 🛑 CRITICAL: If bootstrapping, REPLACE the default soul entirely.
                 prompt = `## 🚀 SYSTEM BOOT — FIRST RUN SEQUENCE\n\n${bootstrapContent}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST use the file_write tool to update these files as you learn information:\n- USER.md — Fill in their name, timezone, and preferences\n- IDENTITY.md — Fill in your name, creature type, vibe, and emoji\n\nDo NOT just remember this information — you must WRITE it to the files so it persists across sessions.\n\nWhen a file is fully populated, it will be automatically loaded into your context on future sessions.`;
 
@@ -149,19 +158,30 @@ export function buildSystemPrompt(
 
                 if (identity && !isTemplateEmpty(identity)) {
                     additionalContext += `\n\n## Identity (Learned So Far)\n${identity}`;
+                    loadedFiles.push({ name: 'IDENTITY.md', chars: identity.length, status: 'partial' });
+                } else if (identity) {
+                    loadedFiles.push({ name: 'IDENTITY.md', chars: identity.length, status: 'template' });
                 }
 
                 if (user && !isTemplateEmpty(user)) {
                     additionalContext += `\n\n## User Info (Learned So Far)\n${user}`;
+                    loadedFiles.push({ name: 'USER.md', chars: user.length, status: 'partial' });
+                } else if (user) {
+                    loadedFiles.push({ name: 'USER.md', chars: user.length, status: 'template' });
                 }
 
                 if (memory && !isTemplateEmpty(memory)) {
                     additionalContext += `\n\n## Long-Term Memory (Permanent)\n${memory}`;
+                    loadedFiles.push({ name: 'MEMORY.md', chars: memory.length, status: 'loaded' });
+                } else if (memory) {
+                    loadedFiles.push({ name: 'MEMORY.md', chars: memory.length, status: 'template' });
                 }
 
                 if (additionalContext) {
                     prompt += `\n\n## ⚠️ RESUMING BOOTSTRAP\nWe have already started this process. Use the context below to pick up where we left off (don't ask questions we've already answered):\n${additionalContext}`;
                 }
+            } else {
+                loadedFiles.push({ name: 'BOOTSTRAP.md', chars: 0, status: 'missing' });
             }
         } else {
             // Normal operation: inject User and Identity context
@@ -171,14 +191,42 @@ export function buildSystemPrompt(
 
             if (identity && !isTemplateEmpty(identity)) {
                 prompt += `\n\n## Your Identity\n\n${identity}`;
+                loadedFiles.push({ name: 'IDENTITY.md', chars: identity.length, status: 'loaded' });
+            } else if (identity) {
+                loadedFiles.push({ name: 'IDENTITY.md', chars: identity.length, status: 'template-empty' });
+            } else {
+                loadedFiles.push({ name: 'IDENTITY.md', chars: 0, status: 'missing' });
             }
 
             if (user && !isTemplateEmpty(user)) {
                 prompt += `\n\n## About the User\n\n${user}`;
+                loadedFiles.push({ name: 'USER.md', chars: user.length, status: 'loaded' });
+            } else if (user) {
+                loadedFiles.push({ name: 'USER.md', chars: user.length, status: 'template-empty' });
+            } else {
+                loadedFiles.push({ name: 'USER.md', chars: 0, status: 'missing' });
             }
 
             if (memory && !isTemplateEmpty(memory)) {
                 prompt += `\n\n## Long-Term Memory (Permanent)\n\n${memory}`;
+                loadedFiles.push({ name: 'MEMORY.md', chars: memory.length, status: 'loaded' });
+            } else if (memory) {
+                loadedFiles.push({ name: 'MEMORY.md', chars: memory.length, status: 'template-empty' });
+            } else {
+                loadedFiles.push({ name: 'MEMORY.md', chars: 0, status: 'missing' });
+            }
+            
+            // Load daily memories (today + yesterday)
+            const dailyMemories = loadDailyMemories(workspaceRoot);
+            if (dailyMemories.length > 0) {
+                prompt += `\n\n## Recent Daily Notes\n\n${dailyMemories.join('\n\n---\n\n')}`;
+                loadedFiles.push({ name: 'Daily Memories', chars: dailyMemories.join('').length, status: 'loaded' });
+            }
+            
+            // Add proactive greeting instruction if we know the user's name
+            const userName = extractUserName(user);
+            if (userName) {
+                prompt += `\n\n## First Message Greeting\nIf this is the first message in this session, greet ${userName} casually (e.g., "Hey ${userName}! Ready to crush some goals? 🚀" or "What's good, ${userName}?"). Don't ask who they are - you already know them from the files above!`;
             }
         }
     }
@@ -232,6 +280,15 @@ ${availableTools.length > 0 ? availableTools.map(t => `- ${t}`).join('\n') : '(N
 - **Remember context.** Pay attention to the memory summary — it contains important decisions and facts.
 - **Be cost-conscious.** Don't make unnecessary tool calls. Plan before acting.
 `;
+
+    // Log workspace files loaded (helps debug "why doesn't it know me?" issues)
+    if (loadedFiles.length > 0) {
+        const summary = loadedFiles.map(f => `${f.name}: ${f.status} (${f.chars} chars)`).join(', ');
+        // Note: Using console.error to avoid polluting stdout, but this goes to debug logs
+        if (process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development') {
+            console.error(`[Workspace Files] ${summary}`);
+        }
+    }
 
     return prompt;
 }
