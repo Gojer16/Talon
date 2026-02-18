@@ -128,10 +128,10 @@ async function main(): Promise<void> {
 Usage: talon <command>
 
 Commands:
-  setup     Run the onboarding wizard (auto-detects running gateways)
-  tui       Connect to running gateway (interactive chat - legacy)
-  tui-new   Connect to running gateway (Ink edition - NEW!)
-  provider  Add/change AI provider
+  setup        Run the onboarding wizard (auto-detects running gateways)
+  tui          Connect to running gateway (Ink edition - NEW!)
+  tui-legacy   Connect to running gateway (legacy readline)
+  provider     Add/change AI provider
   switch    Switch between configured models
   start     Start the gateway server (prevents duplicates)
   stop      Stop any running gateway (safe process detection)
@@ -142,7 +142,8 @@ Commands:
 
 Examples:
   talon setup           # First-time setup (stops old gateways)
-  talon tui             # Interactive chat (connect to gateway)
+  talon tui             # Interactive chat (NEW Ink TUI!)
+  talon tui-legacy      # Legacy readline TUI
   talon provider        # Add/change AI provider
   talon switch          # Switch model
   talon start           # Start gateway (checks for duplicates)
@@ -266,14 +267,14 @@ Examples:
         }
 
         case 'tui': {
-            const { startTUI } = await import('./tui.js');
-            await startTUI();
+            const { startInkTUI } = await import('../tui/index.js');
+            await startInkTUI();
             break;
         }
 
-        case 'tui-new': {
-            const { startInkTUI } = await import('../tui/index.js');
-            await startInkTUI();
+        case 'tui-legacy': {
+            const { startTUI } = await import('./tui.js');
+            await startTUI();
             break;
         }
 

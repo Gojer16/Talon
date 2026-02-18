@@ -52,8 +52,8 @@ Talk to Talon wherever you are:
 **Ink-Based Terminal Interface:**
 
 ```bash
-talon tui-new    # New Ink-based TUI (recommended)
-talon tui        # Legacy readline TUI
+talon tui          # New Ink-based TUI (default)
+talon tui-legacy   # Legacy readline TUI
 ```
 
 **Features:**
