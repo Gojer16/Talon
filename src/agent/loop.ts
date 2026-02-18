@@ -391,14 +391,32 @@ export class AgentLoop {
             // ─── No Tool Calls → Final Response ───────────────────
 
             this.state = 'evaluating';
-            pendingToolResults = []; // Clear — LLM will present tool results itself
 
-            if (response.content) {
+            // If the LLM returned empty content but we had tool results,
+            // synthesize a response so the user always sees something
+            let finalContent = response.content;
+            if (!finalContent && pendingToolResults.length > 0) {
+                logger.warn({ iteration, toolCount: pendingToolResults.length },
+                    'LLM returned empty content after tool calls — synthesizing response from tool results');
+
+                finalContent = pendingToolResults
+                    .map(tr => {
+                        if (tr.success) {
+                            return `**${tr.name}:**\n${tr.output}`;
+                        }
+                        return `**${tr.name}:** ⚠️ ${tr.output}`;
+                    })
+                    .join('\n\n');
+            }
+
+            pendingToolResults = []; // Clear after use
+
+            if (finalContent) {
                 // Add assistant response to session history
                 session.messages.push({
                     id: `msg_${Date.now().toString(36)}_resp`,
                     role: 'assistant',
-                    content: response.content,
+                    content: finalContent,
                     timestamp: Date.now(),
                 });
 
@@ -407,7 +425,7 @@ export class AgentLoop {
                 // Stream the response
                 yield {
                     type: 'text',
-                    content: response.content,
+                    content: finalContent,
                     iteration,
                 };
             }
@@ -433,9 +451,26 @@ export class AgentLoop {
             maxIterations: this.maxIterations,
         }, 'Max iterations reached');
 
+        // Surface any pending tool results before the max-iterations message
+        let maxIterMessage = 'I reached my maximum iteration limit. Here\'s what I have so far — let me know if you\'d like me to continue.';
+        if (pendingToolResults.length > 0) {
+            const toolSummary = pendingToolResults
+                .map(tr => tr.success ? `**${tr.name}:**\n${tr.output}` : `**${tr.name}:** ⚠️ ${tr.output}`)
+                .join('\n\n');
+            maxIterMessage = `${toolSummary}\n\n---\n${maxIterMessage}`;
+
+            // Save to session
+            session.messages.push({
+                id: `msg_${Date.now().toString(36)}_maxiter`,
+                role: 'assistant',
+                content: maxIterMessage,
+                timestamp: Date.now(),
+            });
+        }
+
         yield {
             type: 'text',
-            content: 'I reached my maximum iteration limit. Here\'s what I have so far — let me know if you\'d like me to continue.',
+            content: maxIterMessage,
             iteration,
         };
         yield { type: 'done', providerId: usedProviderId, model: usedModel, iteration };

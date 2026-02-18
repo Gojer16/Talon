@@ -14,7 +14,7 @@ Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt from scratch as a priva
 - **70 Source Files** - Enterprise-grade architecture
 - **26+ Tools** - File, shell, web, browser, productivity, Apple integrations
 - **5 Subagents** - Research, writer, planner, critic, summarizer
-- **8 Apple Tools** - Native Notes, Reminders, Calendar integration (macOS)
+- **8 Apple Tools** - Native Notes, Reminders, Calendar, Mail integration (macOS)
 - **323 Tests** - 100% passing with comprehensive coverage
 - **3 Channels** - CLI, Telegram, WhatsApp
 - **97% Cost Savings** - Via intelligent subagent delegation
@@ -105,6 +105,7 @@ Talk to Talon wherever you are:
 | 🍎 **Apple Notes** | Create and search Apple Notes (macOS) | Native integration |
 | ⏰ **Apple Reminders** | Manage Apple Reminders (macOS) | Native integration |
 | 📅 **Apple Calendar** | Create and manage calendar events (macOS) | Native integration |
+| 📧 **Apple Mail** | Read and manage emails (macOS) | Native integration |
 
 ### Productivity Tools
 
@@ -124,6 +125,10 @@ Talk to Talon wherever you are:
 - **apple_calendar_create_event** - Create calendar events with location and notes
 - **apple_calendar_list_events** - List upcoming events
 - **apple_calendar_delete_event** - Delete events by title
+- **📧 Apple Mail (macOS)**:
+- **apple_mail_list_emails** - List emails from mailbox (inbox, sent, etc.)
+- **apple_mail_read_email** - Read email content by message ID
+- **apple_mail_send_email** - Send new emails with recipient, subject, body
 
 ### Subagent System
 

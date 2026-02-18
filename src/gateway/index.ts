@@ -113,21 +113,21 @@ async function boot(): Promise<void> {
                 if (chunk.type === 'done') {
                     // Get the last assistant message from session
                     const lastMsg = session.messages.filter(m => m.role === 'assistant').pop();
-                    if (lastMsg?.content) {
-                        // Build outbound message with usage metadata
-                        const outbound = {
-                            sessionId,
-                            text: lastMsg.content,
-                            metadata: {
-                                usage: chunk.usage,
-                                provider: chunk.providerId,
-                                model: chunk.model,
-                            },
-                        };
-                        
-                        logger.info({ sessionId, usage: chunk.usage }, 'Emitting message.outbound with usage');
-                        eventBus.emit('message.outbound', { message: outbound, sessionId });
-                    }
+                    const responseText = lastMsg?.content || 'Done — tools executed successfully.';
+
+                    // Build outbound message with usage metadata
+                    const outbound = {
+                        sessionId,
+                        text: responseText,
+                        metadata: {
+                            usage: chunk.usage,
+                            provider: chunk.providerId,
+                            model: chunk.model,
+                        },
+                    };
+
+                    logger.info({ sessionId, usage: chunk.usage }, 'Emitting message.outbound with usage');
+                    eventBus.emit('message.outbound', { message: outbound, sessionId });
                 }
             }
 
@@ -135,11 +135,11 @@ async function boot(): Promise<void> {
             sessionManager.persistSession(session);
         } catch (err) {
             logger.error({ err, sessionId }, 'Agent loop error');
-            
+
             // Extract a user-friendly error message
             const rawError = err instanceof Error ? err.message : String(err);
             let userMessage: string;
-            
+
             // Provide helpful error messages based on error type
             if (rawError.includes('tool_calls') && rawError.includes('tool messages')) {
                 userMessage = "I'm having trouble with the conversation context. Let me reset and try again. You can type `/reset` to clear the session if this continues.";
@@ -154,7 +154,7 @@ async function boot(): Promise<void> {
             } else {
                 userMessage = "I'm sorry, something went wrong. Please try again or type `/reset` to start fresh.";
             }
-            
+
             // Create an outbound error message
             const errorOutbound = {
                 sessionId,
@@ -164,22 +164,22 @@ async function boot(): Promise<void> {
                     errorDetails: rawError,
                 },
             };
-            
+
             // Emit error message so CLI can display it
             eventBus.emit('message.outbound', { message: errorOutbound, sessionId });
-            
+
             // Also broadcast to WebSocket clients
             server.broadcastToSession(sessionId, {
                 id: `ws_${Date.now().toString(36)}`,
                 type: 'error',
                 timestamp: Date.now(),
-                payload: { 
+                payload: {
                     error: userMessage,
                     details: rawError,
                     recoverable: true,
                 },
             });
-            
+
             // Persist session even on error (keep conversation history)
             sessionManager.persistSession(session);
         }

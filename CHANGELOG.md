@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Added
+
+#### Apple Mail Integration (macOS)
+- **apple_mail_list_emails**: List emails from mailbox (inbox, sent, junk, etc.) with sender, subject, date, read status
+- **apple_mail_read_email**: Read full email content by message ID
+- **apple_mail_send_email**: Send emails with recipient, subject, and body
+- **Native Integration**: Uses AppleScript for seamless macOS Mail app integration
+- **Auto-detection**: Only enabled on macOS (darwin platform)
+- **Robust Error Handling**: Fixed AppleScript quoting to handle apostrophes in email subjects/senders
+
+#### Apple Mail Bug Fixes
+- **AppleScript Quoting Fix**: Switched from single-quoted osascript to heredoc syntax to handle emails with apostrophes in subjects/senders
+- **Provider Crash Fix**: Added nullish coalescing defaults for usage.prompt_tokens in OpenCode provider
+- **Silent Failure Fix**: Added pendingToolResults tracking to surface tool outputs when LLM call fails
+
 ### 🐛 Fixed
 
 #### Critical: Agent Memory/Identity Loading
