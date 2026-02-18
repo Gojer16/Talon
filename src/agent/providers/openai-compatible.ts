@@ -70,9 +70,10 @@ export class OpenAICompatibleProvider {
 
     constructor(config: ProviderConfig) {
         this.client = new OpenAI({
-            apiKey: config.apiKey,
+            apiKey: config.apiKey || 'sk-placeholder',
             baseURL: config.baseUrl,
             defaultHeaders: config.extraHeaders,
+            dangerouslyAllowBrowser: true, // Allow empty/placeholder keys
         });
         this.defaultModel = config.defaultModel;
     }
@@ -229,6 +230,16 @@ export class OpenAICompatibleProvider {
 }
 
 // ─── Factory Functions ────────────────────────────────────────────
+
+export function createOpenCodeProvider(apiKey: string, model?: string): OpenAICompatibleProvider {
+    // OpenCode provides free models - use provided API key or placeholder
+    // Note: big-pickle model works better without API key
+    return new OpenAICompatibleProvider({
+        apiKey: apiKey || 'sk-opencode-free-no-key-required',
+        baseUrl: 'https://opencode.ai/zen/v1',
+        defaultModel: model ?? 'minimax-m2.5-free',
+    });
+}
 
 export function createDeepSeekProvider(apiKey: string, model?: string): OpenAICompatibleProvider {
     return new OpenAICompatibleProvider({
