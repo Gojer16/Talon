@@ -18,7 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `src/agent/prompts.ts` - Added debug logging for loaded files with status tracking
 - **Impact**: Agent now always knows who you are, file updates take effect immediately without restart
 - **Tests**: All 323 tests passing, verification script added (`scripts/verify-memory-fix.js`)
-- **Documentation**: `BUGFIX-SUMMARY.md`, `BUGFIX-MEMORY-IDENTITY-COMPLETE.md`
+- **Documentation**: `BUGFIX-SUMMARY.md`, `BUGFIX-MEMORY-IDENTITY-COMPLETE.md`, `TESTING-MEMORY-FIX.md`
+
+#### Browser Launch Improvements
+- **Better Error Handling**: Improved error messages when browser fails to launch
+- **Bundled Chrome Support**: Uses Puppeteer's bundled Chrome by default (`executablePath: undefined`)
+- **Helpful Hints**: Error messages now include installation instructions (`npx puppeteer browsers install chrome`)
+- **File Modified**: `src/tools/browser.ts`
 
 ### ✨ Added
 
