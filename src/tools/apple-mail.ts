@@ -15,13 +15,13 @@ export const appleMailTools = [
         parameters: {
             type: 'object',
             properties: {
-                count: { 
-                    type: 'number', 
-                    description: 'Number of emails to return (default: 10, max: 50)' 
+                count: {
+                    type: 'number',
+                    description: 'Number of emails to return (default: 10, max: 50)'
                 },
-                mailbox: { 
-                    type: 'string', 
-                    description: 'Mailbox name (default: "INBOX")' 
+                mailbox: {
+                    type: 'string',
+                    description: 'Mailbox name (default: "INBOX")'
                 },
                 unreadOnly: {
                     type: 'boolean',
@@ -109,7 +109,9 @@ on sortMessagesByDate(messageList)
 end sortMessagesByDate`;
 
             try {
-                const { stdout } = await execAsync(`osascript -e '${script}'`, { timeout: 30000 });
+                const { stdout } = await execAsync(`osascript <<'APPLESCRIPT'
+${script}
+APPLESCRIPT`, { timeout: 45000, shell: '/bin/bash' });
                 const result = stdout.trim();
                 logger.info({ count, mailbox, unreadOnly, resultLength: result.length }, 'Apple Mail emails listed');
                 return result || `No emails found in ${mailbox}`;
@@ -125,9 +127,9 @@ end sortMessagesByDate`;
         parameters: {
             type: 'object',
             properties: {
-                hours: { 
-                    type: 'number', 
-                    description: 'Get emails from last N hours (default: 24)' 
+                hours: {
+                    type: 'number',
+                    description: 'Get emails from last N hours (default: 24)'
                 },
                 count: {
                     type: 'number',
@@ -207,7 +209,9 @@ on sortMessagesByDate(messageList)
 end sortMessagesByDate`;
 
             try {
-                const { stdout } = await execAsync(`osascript -e '${script}'`, { timeout: 30000 });
+                const { stdout } = await execAsync(`osascript <<'APPLESCRIPT'
+${script}
+APPLESCRIPT`, { timeout: 45000, shell: '/bin/bash' });
                 const result = stdout.trim();
                 logger.info({ hours, maxCount, resultLength: result.length }, 'Apple Mail recent emails retrieved');
                 return result || `No emails from last ${hours} hours`;
@@ -223,13 +227,13 @@ end sortMessagesByDate`;
         parameters: {
             type: 'object',
             properties: {
-                query: { 
-                    type: 'string', 
-                    description: 'Search term to look for in subject, sender, or content' 
+                query: {
+                    type: 'string',
+                    description: 'Search term to look for in subject, sender, or content'
                 },
-                count: { 
-                    type: 'number', 
-                    description: 'Maximum results to return (default: 10)' 
+                count: {
+                    type: 'number',
+                    description: 'Maximum results to return (default: 10)'
                 },
                 mailbox: {
                     type: 'string',
@@ -248,7 +252,7 @@ end sortMessagesByDate`;
             const mailbox = args.mailbox as string | undefined;
 
             let searchScript: string;
-            
+
             if (mailbox) {
                 const mailboxName = escapeAppleScript(mailbox);
                 searchScript = `set targetMailbox to mailbox "${mailboxName}" of first account
@@ -325,7 +329,9 @@ on sortMessagesByDate(messageList)
 end sortMessagesByDate`;
 
             try {
-                const { stdout } = await execAsync(`osascript -e '${script}'`, { timeout: 30000 });
+                const { stdout } = await execAsync(`osascript <<'APPLESCRIPT'
+${script}
+APPLESCRIPT`, { timeout: 45000, shell: '/bin/bash' });
                 const result = stdout.trim();
                 logger.info({ query, count, resultLength: result.length }, 'Apple Mail search completed');
                 return result || `No emails found matching '${args.query}'`;
@@ -341,9 +347,9 @@ end sortMessagesByDate`;
         parameters: {
             type: 'object',
             properties: {
-                index: { 
-                    type: 'number', 
-                    description: 'Index of the email from a previous list (1-based)' 
+                index: {
+                    type: 'number',
+                    description: 'Index of the email from a previous list (1-based)'
                 },
                 mailbox: {
                     type: 'string',
@@ -395,7 +401,9 @@ end sortMessagesByDate`;
 end tell`;
 
             try {
-                const { stdout } = await execAsync(`osascript -e '${script}'`, { timeout: 30000 });
+                const { stdout } = await execAsync(`osascript <<'APPLESCRIPT'
+${script}
+APPLESCRIPT`, { timeout: 45000, shell: '/bin/bash' });
                 const result = stdout.trim();
                 logger.info({ index, mailbox, resultLength: result.length }, 'Apple Mail email content retrieved');
                 return result || 'Could not retrieve email content';
@@ -411,9 +419,9 @@ end tell`;
         parameters: {
             type: 'object',
             properties: {
-                mailbox: { 
-                    type: 'string', 
-                    description: 'Mailbox name (default: "INBOX")' 
+                mailbox: {
+                    type: 'string',
+                    description: 'Mailbox name (default: "INBOX")'
                 },
                 unreadOnly: {
                     type: 'boolean',
@@ -430,7 +438,7 @@ end tell`;
             const unreadOnly = args.unreadOnly === true;
 
             let script: string;
-            
+
             if (unreadOnly) {
                 script = `tell application "Mail"
     if not running then launch
@@ -449,7 +457,9 @@ end tell`;
             }
 
             try {
-                const { stdout } = await execAsync(`osascript -e '${script}'`, { timeout: 10000 });
+                const { stdout } = await execAsync(`osascript <<'APPLESCRIPT'
+${script}
+APPLESCRIPT`, { timeout: 15000, shell: '/bin/bash' });
                 const result = stdout.trim();
                 logger.info({ mailbox, unreadOnly, result }, 'Apple Mail count retrieved');
                 return result;

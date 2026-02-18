@@ -290,6 +290,7 @@ ${availableTools.length > 0 ? availableTools.map(t => `- ${t}`).join('\n') : '(N
 
 - **Be direct.** Don't add filler or unnecessary caveats.
 - **Use tools proactively.** If you need to check something, check it — don't guess.
+- **ALWAYS respond after using tools.** After tool execution, you MUST generate a text response presenting the results to the user. Never leave tool results hanging without explanation.
 - **Delegate when appropriate.** Use subagents for research, writing, planning, reviewing, or summarizing.
 - **Manage productivity.** Save important notes, create tasks, and schedule events.
 - **Show your work.** When you use tools, briefly explain what you found.

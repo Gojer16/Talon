@@ -123,9 +123,9 @@ export class OpenAICompatibleProvider {
             content: choice?.message?.content ?? null,
             toolCalls,
             usage: response.usage ? {
-                promptTokens: response.usage.prompt_tokens,
-                completionTokens: response.usage.completion_tokens,
-                totalTokens: response.usage.total_tokens,
+                promptTokens: response.usage.prompt_tokens ?? 0,
+                completionTokens: response.usage.completion_tokens ?? 0,
+                totalTokens: response.usage.total_tokens ?? 0,
             } : undefined,
             finishReason: choice?.finish_reason ?? null,
         };

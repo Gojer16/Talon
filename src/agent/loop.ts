@@ -75,7 +75,7 @@ export class AgentLoop {
     registerFallbackProviders(): void {
         // Get all available providers from router
         const providers = this.modelRouter.getAllProviders?.() || [];
-        
+
         for (const provider of providers) {
             this.fallbackRouter.registerProvider({
                 id: provider.id,
@@ -153,6 +153,7 @@ export class AgentLoop {
         let iteration = 0;
         let usedProviderId = route.providerId;
         let usedModel = route.model;
+        let pendingToolResults: Array<{ name: string; output: string; success: boolean }> = [];
 
         while (iteration < this.maxIterations) {
             iteration++;
@@ -181,7 +182,7 @@ export class AgentLoop {
             if (contextStatus.shouldBlock) {
                 logger.warn('Context window critical — truncating messages');
                 context = truncateMessagesToFit(context, contextStatus.contextWindow * 0.8);
-                
+
                 // Also trigger compression for next iteration
                 if (!this.memoryManager.needsCompression(session)) {
                     this.memoryManager.markForCompression?.(session);
@@ -190,16 +191,16 @@ export class AgentLoop {
 
             // Make LLM call with fallback support
             let response: LLMResponse;
-            
+
             // Reset to default provider for this iteration
             usedProviderId = route.providerId;
             usedModel = route.model;
-            
+
             try {
                 if (this.fallbackRouter.hasProviders()) {
                     // Use fallback router for automatic retries
                     const failedProviders: string[] = [];
-                    
+
                     const fallbackResult = await this.fallbackRouter.executeWithFallback({
                         messages: context,
                         tools: this.tools.size > 0 ? this.getToolDefinitions() : undefined,
@@ -210,7 +211,7 @@ export class AgentLoop {
                             }
                         },
                     });
-                    
+
                     // Report any fallbacks that were used
                     if (failedProviders.length > 0) {
                         yield {
@@ -219,11 +220,11 @@ export class AgentLoop {
                             iteration,
                         };
                     }
-                    
+
                     response = fallbackResult.response;
                     usedProviderId = fallbackResult.providerId;
                     usedModel = fallbackResult.model;
-                    
+
                     // Log if we used a fallback
                     if (fallbackResult.attempts.length > 1) {
                         logger.info({
@@ -243,9 +244,35 @@ export class AgentLoop {
                 this.state = 'error';
                 const message = err instanceof Error ? err.message : String(err);
                 logger.error({ err, iteration }, 'All LLM providers failed');
-                yield { 
-                    type: 'error', 
-                    content: `LLM error: ${message}\n\nAll providers failed. Please check your API keys and try again.` 
+
+                // If we have pending tool results, surface them to the user
+                // so they can see what the tools returned before the LLM crashed
+                if (pendingToolResults.length > 0) {
+                    const toolSummary = pendingToolResults
+                        .map(tr => `**${tr.name}**: ${tr.success ? tr.output : `Error: ${tr.output}`}`)
+                        .join('\n\n');
+
+                    // Add as assistant message so user sees the tool outputs
+                    const toolSummaryMsg = `Here are the tool results I gathered before the error:\n\n${toolSummary}`;
+                    session.messages.push({
+                        id: `msg_${Date.now().toString(36)}_toolsummary`,
+                        role: 'assistant',
+                        content: toolSummaryMsg,
+                        timestamp: Date.now(),
+                    });
+
+                    yield {
+                        type: 'text',
+                        content: toolSummaryMsg,
+                        iteration,
+                    };
+
+                    pendingToolResults = [];
+                }
+
+                yield {
+                    type: 'error',
+                    content: `LLM error: ${message}\n\nAll providers failed. Please check your API keys and try again.`
                 };
                 return;
             }
@@ -336,6 +363,9 @@ export class AgentLoop {
                         iteration,
                     };
 
+                    // Track tool results in case the next LLM call fails
+                    pendingToolResults.push({ name: tc.name, output: output.slice(0, 2000), success });
+
                     // Add tool result to session history
                     const toolMsg: Message = {
                         id: `msg_${Date.now().toString(36)}_tool`,
@@ -361,6 +391,7 @@ export class AgentLoop {
             // ─── No Tool Calls → Final Response ───────────────────
 
             this.state = 'evaluating';
+            pendingToolResults = []; // Clear — LLM will present tool results itself
 
             if (response.content) {
                 // Add assistant response to session history

@@ -3,6 +3,7 @@
 // This is needed because some models (big-pickle) are disabled when auth is sent
 
 import type { LLMMessage, LLMResponse, LLMTool } from './openai-compatible.js';
+import { logger } from '../../utils/logger.js';
 
 export class OpenCodeProvider {
     private baseUrl: string;
@@ -57,15 +58,24 @@ export class OpenCodeProvider {
 
         return {
             content: message?.content || message?.reasoning_content || '',
-            toolCalls: message?.tool_calls?.map((tc: any) => ({
-                id: tc.id,
-                name: tc.function.name,
-                args: JSON.parse(tc.function.arguments),
-            })) || [],
+            toolCalls: message?.tool_calls?.map((tc: any) => {
+                let args: Record<string, unknown> = {};
+                try {
+                    args = JSON.parse(tc.function.arguments || '{}');
+                } catch {
+                    logger.warn({ toolName: tc.function?.name }, 'Failed to parse tool call arguments from OpenCode');
+                    args = {};
+                }
+                return {
+                    id: tc.id,
+                    name: tc.function.name,
+                    args,
+                };
+            }) || [],
             usage: data.usage ? {
-                promptTokens: data.usage.prompt_tokens,
-                completionTokens: data.usage.completion_tokens,
-                totalTokens: data.usage.total_tokens,
+                promptTokens: data.usage.prompt_tokens ?? 0,
+                completionTokens: data.usage.completion_tokens ?? 0,
+                totalTokens: data.usage.total_tokens ?? 0,
             } : undefined,
             finishReason: choice?.finish_reason || null,
         };
