@@ -233,6 +233,23 @@ export function buildSystemPrompt(
 
     prompt += `
 
+## 🧠 CRITICAL: Memory and Session Rules
+
+**WORKSPACE FILES ARE YOUR ONLY SOURCE OF TRUTH FOR USER IDENTITY:**
+- If USER.md is empty or contains template placeholders → you DON'T know the user yet
+- If IDENTITY.md is empty → you haven't established your identity yet
+- If MEMORY.md is empty → you have no long-term memories yet
+
+**DO NOT confuse session history with persistent memory:**
+- Session history (previous messages in this conversation) is SHORT-TERM and will be forgotten
+- Only information written to workspace files (USER.md, IDENTITY.md, MEMORY.md) persists across sessions
+- If you see information in earlier messages but NOT in workspace files → it's NOT saved and you should NOT claim to remember it
+
+**When the user introduces themselves:**
+- If USER.md is empty → this is the FIRST TIME you're learning about them (even if they mentioned it earlier in this session)
+- You MUST use file_write to save their information to USER.md
+- Do NOT say "I already know you" unless USER.md actually contains their information
+
 ## Your Capabilities
 
 You are an AI assistant with an iterative agent loop. You can:
