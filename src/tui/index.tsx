@@ -10,6 +10,14 @@ import chalk from 'chalk';
 const GATEWAY_URL = 'ws://127.0.0.1:19789/ws';
 
 export async function startInkTUI(): Promise<void> {
+  // Check if stdin is a TTY (required for Ink)
+  if (!process.stdin.isTTY) {
+    console.error(chalk.red('✗ Error: Ink TUI requires an interactive terminal'));
+    console.error(chalk.dim('  This command must be run in a terminal, not piped or redirected'));
+    console.error(chalk.dim('  Try running: talon tui-legacy (for non-TTY environments)\n'));
+    process.exit(1);
+  }
+
   console.clear();
 
   // Check if gateway is running

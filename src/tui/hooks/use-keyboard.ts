@@ -12,12 +12,18 @@ export interface KeyboardShortcuts {
   onCtrlT?: () => void;
   onShiftTab?: () => void;
   onEscape?: () => void;
+  isActive?: boolean; // Only capture when active (e.g., in overlay)
 }
 
 export function useKeyboard(shortcuts: KeyboardShortcuts) {
+  const { isActive = true } = shortcuts;
+  
   useInput(
     useCallback(
       (input, key) => {
+        // Only handle shortcuts, not regular typing
+        // Let TextInput handle regular input
+        
         if (key.ctrl && input === 'c') {
           shortcuts.onCtrlC?.();
           return;
@@ -62,8 +68,11 @@ export function useKeyboard(shortcuts: KeyboardShortcuts) {
           shortcuts.onEscape?.();
           return;
         }
+        
+        // Don't consume other input - let it pass through to TextInput
       },
       [shortcuts]
-    )
+    ),
+    { isActive } // Only active when specified
   );
 }
