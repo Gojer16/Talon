@@ -47,6 +47,7 @@ export async function startTUI(): Promise<void> {
     console.log(chalk.green('✓ Connected to gateway'));
     console.log(chalk.yellow('⚡ Model: ') + chalk.dim(config.agent.model));
     console.log(chalk.blue('📍 Workspace: ') + chalk.dim(config.workspace.root));
+    console.log(chalk.dim('  Loading memory files...'));
     console.log('');
 
     const ws = new WebSocket(GATEWAY_URL);
