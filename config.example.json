@@ -15,9 +15,13 @@
   },
 
   "agent": {
-    "model": "deepseek/deepseek-chat",
-    "subagentModel": "openrouter/openai/gpt-4o-mini",
+    "model": "opencode/minimax-m2.5-free",
+    "subagentModel": "opencode/minimax-m2.5-free",
     "providers": {
+      "opencode": {
+        "apiKey": "sk-opencode-free-no-key-required",
+        "models": ["minimax-m2.5-free", "big-pickle", "glm-5-free", "kimi-k2.5-free"]
+      },
       "deepseek": {
         "apiKey": "${DEEPSEEK_API_KEY}",
         "models": ["deepseek-chat", "deepseek-reasoner"]
