@@ -5,6 +5,42 @@ All notable changes to Talon will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-02-17
+
+### ✨ Added
+
+#### OpenCode Integration (100% FREE Models)
+- **4 Free Models**: minimax-m2.5-free, big-pickle, glm-5-free, kimi-k2.5-free
+- **No API Key Required**: Zero cost, unlimited usage
+- **Custom Provider**: Direct fetch API without Authorization header
+- **Router Integration**: OpenCode prioritized as cheapest provider
+- **Setup Wizard Support**: Automatic configuration in `talon setup`
+- **CLI Commands**: Full support in `talon provider` and `talon switch`
+- **Subagent Support**: All subagents can use free models
+- **Error Handling**: Rate limit detection and automatic fallback
+- **Cost Savings**: 100% free vs $126/month (DeepSeek)
+
+#### Documentation
+- **OPENCODE_INTEGRATION.md**: Comprehensive integration guide
+- **OPENCODE_QUICKSTART.md**: 2-minute setup guide
+- **OPENCODE_IMPLEMENTATION.md**: Technical implementation details
+- **OPENCODE_VERIFICATION.md**: Full test verification report
+
+#### Testing
+- **Integration Tests**: All 4 models verified working
+- **Comprehensive Tests**: Router, subagents, agent loop tested
+- **323 Tests Passing**: No regressions introduced
+
+### 🔧 Changed
+- **Default Provider**: OpenCode set as default in `config.example.json`
+- **Model Router**: OpenCode prioritized first for cost optimization
+- **Provider Definitions**: OpenCode listed first in CLI
+
+### 📚 Documentation
+- Updated README with OpenCode features
+- Added OpenCode to `.env.example` with usage notes
+- Comprehensive test documentation
+
 ## [0.3.1] - 2026-02-17
 
 ### ✨ Added
