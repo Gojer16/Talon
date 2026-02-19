@@ -5,6 +5,47 @@ All notable changes to Talon will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-19
+
+### ✨ Added
+
+#### SQLite Persistence
+- **SQLite Database**: Replaced file-based session storage with SQLite
+  - Better concurrent access with WAL mode
+  - ACID transactions for data integrity
+  - Query capabilities with indexed lookups
+  - Smaller disk footprint
+  - Industry standard database
+- **Automatic Migration**: Migrates existing file-based sessions to SQLite on first boot
+- **Database Schema**: 
+  - `sessions` table with 7 indexes
+  - `messages` table with foreign keys
+  - `metadata` table for migrations
+- **Database Operations**:
+  - Full CRUD operations for sessions and messages
+  - Database stats (total sessions, active sessions, total messages, db size)
+  - Vacuum support for database optimization
+
+### 🔧 Changed
+- **Version Bump**: Updated to v0.4.0
+- **Session Manager**: Now uses SQLite instead of file-based storage
+- **Performance**: Improved session lookup and persistence speed
+
+### 📚 Documentation
+- **v0.4.0 Plan**: Complete development plan for v0.4.0 features
+- **Shipping Summary**: Combined v0.3.3 & v0.4.0 achievements
+
+### 🧪 Testing
+- **All Tests Passing**: 514/515 tests (99.8%)
+- **Session Manager Tests**: 11/11 passing with SQLite
+
+### 📊 Stats
+- **Database**: SQLite with WAL mode
+- **Migration**: Automatic on first boot
+- **Performance**: Instant queries vs file I/O
+
+---
+
 ## [0.3.3] - 2026-02-19
 
 ### ✨ Added
