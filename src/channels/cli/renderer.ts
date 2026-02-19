@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import readline from 'node:readline';
 import path from 'node:path';
-import { formatAIResponse } from './utils.js';
+import { formatAIResponse, Spinner } from './utils.js';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -45,6 +45,7 @@ export class TerminalRenderer {
     private responseTimeout: ReturnType<typeof setTimeout> | null = null;
     private isWaiting = false;
     private timeoutMs: number;
+    private spinner = new Spinner('Thinking');
 
     public currentModel = 'unknown';
 
@@ -98,6 +99,7 @@ export class TerminalRenderer {
 
     /** Reset all state (e.g. on /clear or /reset) */
     reset(): void {
+        this.spinner.stop();
         this.responseBuffer = '';
         this.toolResultsBuffer = [];
         this.isWaiting = false;
@@ -107,16 +109,53 @@ export class TerminalRenderer {
     // ─── Chunk Handlers ──────────────────────────────────────────
 
     private handleText(chunk: RenderChunk): void {
+        this.spinner.stop();
         this.clearLine();
-        this.responseBuffer += chunk.content ?? '';
+        const content = chunk.content ?? '';
+        this.responseBuffer += content;
+
+        // Show progress indicator
+        process.stdout.write(chalk.dim(`  Generating response... (${this.responseBuffer.length} chars)`));
     }
 
-    private handleThinking(_chunk: RenderChunk): void {
-        this.clearLine();
-        process.stdout.write(chalk.dim('  ⏳ Talon is thinking...'));
+    private handleThinking(chunk: RenderChunk): void {
+        let text = chunk.content ? chunk.content.trim() : '';
+
+        // Filter out "Iteration X..." messages
+        if (text.startsWith('Iteration ')) {
+            text = '';
+        }
+
+        // Always pick a random thought if we don't have specific content (or if we filtered it)
+        const thoughts = [
+            'Pondering the Orb 🔮',
+            'Weaving Logic 🧵',
+            'Consulting the Archives 📚',
+            'Synthesizing Knowledge 🧠',
+            'Tracing the Leylines ⚡',
+            'Analyzing Reality 📐',
+            'Gathering Mana ✨',
+            'Communing with Spirits 👻',
+            'Calculating Variables 🧮'
+        ];
+
+        let displayText = text;
+        if (!displayText) {
+            displayText = thoughts[Math.floor(Math.random() * thoughts.length)];
+        }
+
+        if (!this.spinner.isActive()) {
+            this.spinner.setText(displayText);
+            this.spinner.start();
+        } else {
+            // Update if we have specific text, OR if we generated a new random thought
+            // To make it dynamic, we update even if random
+            this.spinner.setText(displayText);
+        }
     }
 
     private handleError(chunk: RenderChunk): void {
+        this.spinner.stop();
         this.clearLine();
 
         // Show any tool results collected before the error
@@ -129,26 +168,51 @@ export class TerminalRenderer {
     }
 
     private handleToolCall(chunk: RenderChunk): void {
+        this.spinner.stop();
         this.clearLine();
 
         const toolName = chunk.toolCall?.name ?? 'tool';
         const toolArgs = chunk.toolCall?.args;
-        let toolInfo = toolName;
+        // Gamified / Fun tool names
+        let funName = toolName;
+        let icon = '🛠️';
 
-        // Show contextual info for common arg patterns
+        if (toolName.includes('shell')) { funName = 'Casting Spell'; icon = '🪄'; }
+        else if (toolName.includes('file_read')) { funName = 'Reading Scroll'; icon = '📜'; }
+        else if (toolName.includes('file_write')) { funName = 'Inscribing Runes'; icon = '✍️'; }
+        else if (toolName.includes('file_list')) { funName = 'Surveying Realm'; icon = '🗺️'; }
+        else if (toolName.includes('grep')) { funName = 'Scrying'; icon = '🔮'; }
+        else if (toolName.includes('replace')) { funName = 'Transmuting'; icon = '⚗️'; }
+        else if (toolName.includes('web')) { funName = 'Consulting Oracle'; icon = '🌐'; }
+
+        // Context info
+        let context = '';
         if (toolArgs?.path && typeof toolArgs.path === 'string') {
-            const fileName = path.basename(toolArgs.path);
-            toolInfo = `${toolName} → ${fileName}`;
+            context = `→ ${path.basename(toolArgs.path)}`;
         } else if (toolArgs?.url && typeof toolArgs.url === 'string') {
-            toolInfo = `${toolName} → ${(toolArgs.url as string).substring(0, 40)}${(toolArgs.url as string).length > 40 ? '...' : ''}`;
+            context = `→ ${(toolArgs.url as string).substring(0, 40)}${(toolArgs.url as string).length > 40 ? '...' : ''}`;
         } else if (toolArgs?.query && typeof toolArgs.query === 'string') {
-            toolInfo = `${toolName} → ${(toolArgs.query as string).substring(0, 30)}...`;
+            context = `→ ${(toolArgs.query as string).substring(0, 30)}...`;
         }
 
-        console.log(chalk.dim(`  🛠️  ${toolInfo}`));
+        console.log(chalk.dim(`  ${icon}  ${funName} ${context}`));
 
         // Pre-register in results buffer for pairing with tool_result
         this.toolResultsBuffer.push({ name: toolName, output: '', success: true });
+
+        // Gamified / Fun tool names for the living spinner status
+        let funStatus = `Running ${toolName}...`;
+        if (toolName.includes('shell')) funStatus = 'Casting Terminal Spell 🪄';
+        else if (toolName.includes('file_read')) funStatus = 'Reading Ancient Scrolls 📜';
+        else if (toolName.includes('file_write')) funStatus = 'Inscribing Runes ✍️';
+        else if (toolName.includes('file_list')) funStatus = 'Surveying the Realm 🗺️';
+        else if (toolName.includes('grep')) funStatus = 'Scrying for Knowledge 🔮';
+        else if (toolName.includes('replace')) funStatus = 'Transmuting Matter ⚗️';
+        else if (toolName.includes('web')) funStatus = 'Consulting the Oracle 🌐';
+
+        // Restart spinner for tool execution
+        this.spinner.setText(funStatus);
+        this.spinner.start();
     }
 
     private handleToolResult(chunk: RenderChunk): void {
@@ -170,6 +234,7 @@ export class TerminalRenderer {
     }
 
     private handleDone(chunk: RenderChunk): void {
+        this.spinner.stop();
         this.clearLine();
 
         // Track model from done chunk

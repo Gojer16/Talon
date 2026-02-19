@@ -5,24 +5,161 @@ import { type WebSocket } from 'ws';
 
 // ─── WebSocket Protocol ───────────────────────────────────────────
 
-export type MessageType =
-    | 'channel.message'
+// Client → Server events
+export type ClientEventType =
+    | 'gateway.status'
+    | 'session.list'
+    | 'session.create'
+    | 'session.send_message'
+    | 'session.reset'
+    | 'tools.list'
+    | 'tools.invoke'
+    | 'channel.message'; // Legacy support
+
+// Server → Client events
+export type ServerEventType =
+    | 'gateway.status'
+    | 'session.created'
+    | 'session.list'
+    | 'session.message.delta'
+    | 'session.message.final'
+    | 'session.reset'
+    | 'tools.list'
+    | 'tools.result'
+    | 'session.error'
     | 'agent.response'
     | 'agent.response.end'
     | 'tool.call'
     | 'tool.result'
     | 'tool.stream'
     | 'shadow.ghost'
-    | 'session.created'
     | 'session.resumed'
     | 'config.updated'
     | 'error';
+
+export type MessageType = ClientEventType | ServerEventType;
 
 export interface WSMessage {
     id: string;
     type: MessageType;
     timestamp: number;
     payload: unknown;
+}
+
+// ─── WebSocket Event Payloads ─────────────────────────────────────
+
+// Client → Server
+export interface GatewayStatusRequest {}
+
+export interface SessionListRequest {}
+
+export interface SessionCreateRequest {
+    senderId: string;
+    channel: string;
+    senderName?: string;
+}
+
+export interface SessionSendMessageRequest {
+    sessionId: string;
+    text: string;
+    senderName?: string;
+}
+
+export interface SessionResetRequest {
+    sessionId: string;
+}
+
+export interface ToolsListRequest {}
+
+export interface ToolsInvokeRequest {
+    toolName: string;
+    args: Record<string, unknown>;
+}
+
+// Server → Client
+export interface GatewayStatusResponse {
+    status: 'ok' | 'degraded';
+    version: string;
+    uptime: number;
+    timestamp: string;
+    components: {
+        gateway: 'ok' | 'error';
+        sessions: 'ok' | 'error';
+        agent: 'ok' | 'disabled' | 'error';
+        websocket: 'ok' | 'error';
+    };
+    stats: {
+        sessions: number;
+        activeSessions: number;
+        wsClients: number;
+        totalMessages: number;
+    };
+}
+
+export interface SessionCreatedResponse {
+    sessionId: string;
+    senderId: string;
+    channel: string;
+    createdAt: number;
+}
+
+export interface SessionListResponse {
+    sessions: Array<{
+        id: string;
+        senderId: string;
+        channel: string;
+        state: 'created' | 'active' | 'idle';
+        messageCount: number;
+        createdAt: number;
+        lastActiveAt: number;
+    }>;
+}
+
+export interface SessionMessageDelta {
+    sessionId: string;
+    delta: string;
+    index: number;
+}
+
+export interface SessionMessageFinal {
+    sessionId: string;
+    message: {
+        role: 'assistant';
+        content: string;
+        timestamp: number;
+    };
+    usage?: {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+    };
+    model?: string;
+}
+
+export interface SessionResetResponse {
+    sessionId: string;
+    success: boolean;
+}
+
+export interface ToolsListResponse {
+    tools: Array<{
+        name: string;
+        description: string;
+        parameters: Record<string, unknown>;
+    }>;
+}
+
+export interface ToolsResultResponse {
+    toolName: string;
+    success: boolean;
+    output: string;
+    error?: string;
+}
+
+export interface SessionErrorResponse {
+    error: string;
+    code?: string;
+    sessionId?: string;
 }
 
 // ─── Messages ─────────────────────────────────────────────────────

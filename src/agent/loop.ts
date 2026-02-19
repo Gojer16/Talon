@@ -87,6 +87,24 @@ export class AgentLoop {
     }
 
     /**
+     * Get all registered tools.
+     */
+    getRegisteredTools(): ToolHandler[] {
+        return Array.from(this.tools.values());
+    }
+
+    /**
+     * Execute a tool directly.
+     */
+    async executeTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+        const tool = this.tools.get(toolName);
+        if (!tool) {
+            throw new Error(`Tool not found: ${toolName}`);
+        }
+        return await tool.execute(args);
+    }
+
+    /**
      * Assign priority to providers (lower = higher priority).
      */
     private getProviderPriority(providerId: string): number {

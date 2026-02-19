@@ -12,10 +12,10 @@ import chalk from 'chalk';
 export function levenshteinDistance(str1: string, str2: string): number {
     const len1 = str1.length;
     const len2 = str2.length;
-    
+
     // Create distance matrix
     const matrix: number[][] = [];
-    
+
     // Initialize first column and row
     for (let i = 0; i <= len1; i++) {
         matrix[i] = [i];
@@ -23,7 +23,7 @@ export function levenshteinDistance(str1: string, str2: string): number {
     for (let j = 0; j <= len2; j++) {
         matrix[0][j] = j;
     }
-    
+
     // Fill the matrix
     for (let i = 1; i <= len1; i++) {
         for (let j = 1; j <= len2; j++) {
@@ -35,7 +35,7 @@ export function levenshteinDistance(str1: string, str2: string): number {
             );
         }
     }
-    
+
     return matrix[len1][len2];
 }
 
@@ -45,7 +45,7 @@ export function levenshteinDistance(str1: string, str2: string): number {
 export function stringSimilarity(str1: string, str2: string): number {
     const maxLen = Math.max(str1.length, str2.length);
     if (maxLen === 0) return 1;
-    
+
     const distance = levenshteinDistance(str1, str2);
     return 1 - distance / maxLen;
 }
@@ -63,29 +63,29 @@ export function formatAlignedColumns(
     maxWidth: number = 80
 ): string {
     if (items.length === 0) return '';
-    
+
     // Find longest command for alignment
     const maxCmdLength = Math.max(...items.map(([cmd]) => cmd.length));
-    
+
     // Calculate available space for description
     // Format: "  /cmd    description"
     //         ^2 ^cmd   ^4
     const descStart = 2 + maxCmdLength + 4;
     const descWidth = maxWidth - descStart;
-    
+
     return items.map(([cmd, desc]) => {
         const paddedCmd = cmd.padEnd(maxCmdLength);
-        
+
         // Word wrap description if needed
         if (desc.length <= descWidth) {
             return `  /${paddedCmd}    ${desc}`;
         }
-        
+
         // Wrap long descriptions
         const words = desc.split(' ');
         const lines: string[] = [];
         let currentLine = '';
-        
+
         for (const word of words) {
             if ((currentLine + ' ' + word).trim().length <= descWidth) {
                 currentLine += (currentLine ? ' ' : '') + word;
@@ -95,13 +95,13 @@ export function formatAlignedColumns(
             }
         }
         if (currentLine) lines.push(currentLine);
-        
+
         // First line with command, subsequent lines indented
         const firstLine = `  /${paddedCmd}    ${lines[0]}`;
-        const otherLines = lines.slice(1).map(line => 
+        const otherLines = lines.slice(1).map(line =>
             ' '.repeat(descStart) + line
         );
-        
+
         return [firstLine, ...otherLines].join('\n');
     }).join('\n');
 }
@@ -128,46 +128,46 @@ export class Spinner {
     private currentFrame = 0;
     private text: string;
     private isRunning = false;
-    
+
     constructor(text: string = 'Thinking') {
         this.text = text;
     }
-    
+
     start(): void {
         if (this.isRunning) return;
-        
+
         this.isRunning = true;
         this.currentFrame = 0;
-        
+
         // Hide cursor
         process.stdout.write('\x1B[?25l');
-        
+
         this.interval = setInterval(() => {
             const frame = this.frames[this.currentFrame];
             process.stdout.write(`\r${chalk.gray(`  ${frame} ${this.text}...`)}`);
             this.currentFrame = (this.currentFrame + 1) % this.frames.length;
         }, 80);
     }
-    
+
     stop(): void {
         if (!this.isRunning) return;
-        
+
         if (this.interval) {
             clearInterval(this.interval);
             this.interval = null;
         }
-        
+
         // Clear the spinner line and show cursor
         process.stdout.write('\r\x1b[K');
         process.stdout.write('\x1B[?25h');
-        
+
         this.isRunning = false;
     }
-    
+
     setText(text: string): void {
         this.text = text;
     }
-    
+
     isActive(): boolean {
         return this.isRunning;
     }
@@ -190,16 +190,29 @@ export function getTerminalWidth(): number {
  * - Adds color to bullet points for better readability
  * - Preserves other formatting
  */
+import { renderMarkdown } from './markdown.js';
+
+/**
+ * Format AI response text for terminal display using rich Markdown rendering
+ */
 export function formatAIResponse(text: string): string {
     if (!text) return text;
+    try {
+        let rendered = renderMarkdown(text);
 
-    return text
-        // Remove ** markdown bold (but keep the content)
-        .replace(/\*\*(.+?)\*\*/g, '$1')
-        // Add color to bullet points (lines starting with -)
-        .replace(/^(\s*)-\s+/gm, (match, indent) => {
-            return `${indent}${chalk.cyan('•')} `;
-        });
+        // Decode HTML entities that marked might have escaped
+        rendered = rendered
+            .replace(/&#39;/g, "'")
+            .replace(/&quot;/g, '"')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&');
+
+        return rendered;
+    } catch (e) {
+        // Fallback to basic processing if markdown rendering fails
+        return text.replace(/\*\*(.+?)\*\*/g, '$1');
+    }
 }
 
 /**

@@ -271,7 +271,36 @@ export class TalonServer {
             const msg = JSON.parse(data.toString()) as WSMessage;
 
             switch (msg.type) {
+                case 'gateway.status': {
+                    this.handleGatewayStatus(client);
+                    break;
+                }
+                case 'session.list': {
+                    this.handleSessionList(client);
+                    break;
+                }
+                case 'session.create': {
+                    this.handleSessionCreate(client, msg.payload);
+                    break;
+                }
+                case 'session.send_message': {
+                    this.handleSessionSendMessage(client, msg.payload);
+                    break;
+                }
+                case 'session.reset': {
+                    this.handleSessionReset(client, msg.payload);
+                    break;
+                }
+                case 'tools.list': {
+                    this.handleToolsList(client);
+                    break;
+                }
+                case 'tools.invoke': {
+                    this.handleToolsInvoke(client, msg.payload);
+                    break;
+                }
                 case 'channel.message': {
+                    // Legacy support
                     const payload = msg.payload as InboundMessage;
                     const sessionId = this.router.handleInbound(payload);
                     client.sessionId = sessionId;
@@ -279,6 +308,12 @@ export class TalonServer {
                 }
                 default:
                     logger.warn({ type: msg.type }, 'Unknown WebSocket message type');
+                    this.sendToClient(client, {
+                        id: nanoid(),
+                        type: 'error',
+                        timestamp: Date.now(),
+                        payload: { error: `Unknown message type: ${msg.type}` },
+                    });
             }
         } catch (err) {
             logger.error({ err }, 'Failed to parse WebSocket message');
@@ -287,6 +322,212 @@ export class TalonServer {
                 type: 'error',
                 timestamp: Date.now(),
                 payload: { error: 'Invalid message format' },
+            });
+        }
+    }
+
+    // ─── Event Handlers ───────────────────────────────────────────
+
+    private handleGatewayStatus(client: WSClient): void {
+        const sessions = this.sessionManager.getAllSessions();
+        
+        this.sendToClient(client, {
+            id: nanoid(),
+            type: 'gateway.status',
+            timestamp: Date.now(),
+            payload: {
+                status: 'ok',
+                version: '0.3.3',
+                uptime: process.uptime(),
+                timestamp: new Date().toISOString(),
+                components: {
+                    gateway: 'ok',
+                    sessions: 'ok',
+                    agent: this.agentLoop ? 'ok' : 'disabled',
+                    websocket: 'ok',
+                },
+                stats: {
+                    sessions: sessions.length,
+                    activeSessions: sessions.filter(s => s.state === 'active').length,
+                    wsClients: this.clients.size,
+                    totalMessages: sessions.reduce((sum, s) => sum + s.metadata.messageCount, 0),
+                },
+            },
+        });
+    }
+
+    private handleSessionList(client: WSClient): void {
+        const sessions = this.sessionManager.getAllSessions();
+        
+        this.sendToClient(client, {
+            id: nanoid(),
+            type: 'session.list',
+            timestamp: Date.now(),
+            payload: {
+                sessions: sessions.map(s => ({
+                    id: s.id,
+                    senderId: s.senderId,
+                    channel: s.channel,
+                    state: s.state,
+                    messageCount: s.metadata.messageCount,
+                    createdAt: s.metadata.createdAt,
+                    lastActiveAt: s.metadata.lastActiveAt,
+                })),
+            },
+        });
+    }
+
+    private handleSessionCreate(client: WSClient, payload: unknown): void {
+        const req = payload as { senderId: string; channel: string; senderName?: string };
+        
+        const session = this.sessionManager.createSession(
+            req.senderId,
+            req.channel,
+            req.senderName,
+        );
+        
+        client.sessionId = session.id;
+        
+        this.sendToClient(client, {
+            id: nanoid(),
+            type: 'session.created',
+            timestamp: Date.now(),
+            payload: {
+                sessionId: session.id,
+                senderId: session.senderId,
+                channel: session.channel,
+                createdAt: session.metadata.createdAt,
+            },
+        });
+    }
+
+    private handleSessionSendMessage(client: WSClient, payload: unknown): void {
+        const req = payload as { sessionId: string; text: string; senderName?: string };
+        
+        const session = this.sessionManager.getSession(req.sessionId);
+        if (!session) {
+            this.sendToClient(client, {
+                id: nanoid(),
+                type: 'session.error',
+                timestamp: Date.now(),
+                payload: {
+                    error: 'Session not found',
+                    code: 'SESSION_NOT_FOUND',
+                    sessionId: req.sessionId,
+                },
+            });
+            return;
+        }
+
+        const message: InboundMessage = {
+            channel: session.channel,
+            senderId: session.senderId,
+            senderName: req.senderName ?? 'WebSocket',
+            text: req.text,
+            media: null,
+            isGroup: false,
+            groupId: null,
+        };
+
+        this.router.handleInbound(message);
+        client.sessionId = req.sessionId;
+    }
+
+    private handleSessionReset(client: WSClient, payload: unknown): void {
+        const req = payload as { sessionId: string };
+        
+        const session = this.sessionManager.getSession(req.sessionId);
+        if (!session) {
+            this.sendToClient(client, {
+                id: nanoid(),
+                type: 'session.error',
+                timestamp: Date.now(),
+                payload: {
+                    error: 'Session not found',
+                    code: 'SESSION_NOT_FOUND',
+                    sessionId: req.sessionId,
+                },
+            });
+            return;
+        }
+
+        // Clear session history
+        session.messages = [];
+        session.memorySummary = '';
+        session.metadata.messageCount = 0;
+        this.sessionManager.persistSession(session);
+        
+        this.sendToClient(client, {
+            id: nanoid(),
+            type: 'session.reset',
+            timestamp: Date.now(),
+            payload: {
+                sessionId: req.sessionId,
+                success: true,
+            },
+        });
+    }
+
+    private handleToolsList(client: WSClient): void {
+        // Get tools from agent loop if available
+        const tools = this.agentLoop?.getRegisteredTools?.() || [];
+        
+        this.sendToClient(client, {
+            id: nanoid(),
+            type: 'tools.list',
+            timestamp: Date.now(),
+            payload: {
+                tools: tools.map(t => ({
+                    name: t.name,
+                    description: t.description,
+                    parameters: t.parameters,
+                })),
+            },
+        });
+    }
+
+    private async handleToolsInvoke(client: WSClient, payload: unknown): Promise<void> {
+        const req = payload as { toolName: string; args: Record<string, unknown> };
+        
+        if (!this.agentLoop) {
+            this.sendToClient(client, {
+                id: nanoid(),
+                type: 'tools.result',
+                timestamp: Date.now(),
+                payload: {
+                    toolName: req.toolName,
+                    success: false,
+                    output: '',
+                    error: 'Agent loop not initialized',
+                },
+            });
+            return;
+        }
+
+        try {
+            const result = await this.agentLoop.executeTool?.(req.toolName, req.args);
+            
+            this.sendToClient(client, {
+                id: nanoid(),
+                type: 'tools.result',
+                timestamp: Date.now(),
+                payload: {
+                    toolName: req.toolName,
+                    success: true,
+                    output: result || '',
+                },
+            });
+        } catch (err) {
+            this.sendToClient(client, {
+                id: nanoid(),
+                type: 'tools.result',
+                timestamp: Date.now(),
+                payload: {
+                    toolName: req.toolName,
+                    success: false,
+                    output: '',
+                    error: String(err),
+                },
             });
         }
     }

@@ -7,6 +7,7 @@
 
 import WebSocket from 'ws';
 import readline from 'readline';
+import { nanoid } from 'nanoid';
 
 const WS_URL = 'ws://127.0.0.1:19789/ws';
 
@@ -17,16 +18,78 @@ const rl = readline.createInterface({
 });
 
 let ws = null;
+let currentSessionId = null;
+
+// Helper to send message
+function send(type, payload = {}) {
+    const msg = {
+        id: nanoid(),
+        type,
+        timestamp: Date.now(),
+        payload
+    };
+    ws.send(JSON.stringify(msg));
+    console.log(`→ Sent: ${type}`);
+}
 
 // Predefined commands
 const commands = {
-    status: () => ({ type: 'gateway.status' }),
-    tools: () => ({ type: 'tools.list' }),
-    echo: (text) => ({ type: 'tools.invoke', toolName: 'shell_execute', args: { command: `echo '${text}'` } }),
-    ls: () => ({ type: 'tools.invoke', toolName: 'shell_execute', args: { command: 'ls -la' } }),
-    pwd: () => ({ type: 'tools.invoke', toolName: 'shell_execute', args: { command: 'pwd' } }),
-    screenshot: () => ({ type: 'tools.invoke', toolName: 'desktop_screenshot', args: {} }),
-    'test-safety': () => ({ type: 'tools.invoke', toolName: 'shell_execute', args: { command: 'rm -rf /' } }),
+    // Gateway
+    status: () => send('gateway.status'),
+    
+    // Sessions
+    sessions: () => send('session.list'),
+    create: () => {
+        send('session.create', {
+            senderId: 'ws-client',
+            channel: 'websocket',
+            senderName: 'WebSocket Client'
+        });
+    },
+    send: (text) => {
+        if (!currentSessionId) {
+            console.log('✗ No session. Use "create" first.');
+            return;
+        }
+        send('session.send_message', {
+            sessionId: currentSessionId,
+            text,
+            senderName: 'WebSocket Client'
+        });
+    },
+    reset: () => {
+        if (!currentSessionId) {
+            console.log('✗ No session. Use "create" first.');
+            return;
+        }
+        send('session.reset', { sessionId: currentSessionId });
+    },
+    
+    // Tools
+    tools: () => send('tools.list'),
+    invoke: (toolName, args) => send('tools.invoke', { toolName, args }),
+    
+    // Quick tool shortcuts
+    echo: (text) => send('tools.invoke', {
+        toolName: 'shell_execute',
+        args: { command: `echo '${text}'` }
+    }),
+    ls: () => send('tools.invoke', {
+        toolName: 'shell_execute',
+        args: { command: 'ls -la' }
+    }),
+    pwd: () => send('tools.invoke', {
+        toolName: 'shell_execute',
+        args: { command: 'pwd' }
+    }),
+    screenshot: () => send('tools.invoke', {
+        toolName: 'desktop_screenshot',
+        args: {}
+    }),
+    'test-safety': () => send('tools.invoke', {
+        toolName: 'shell_execute',
+        args: { command: 'rm -rf /' }
+    }),
 };
 
 function connect() {
@@ -36,14 +99,27 @@ function connect() {
     
     ws.on('open', () => {
         console.log('✓ Connected to Talon Gateway\n');
-        console.log('Quick commands:');
+        console.log('Gateway Commands:');
         console.log('  status          - Get gateway status');
+        console.log('');
+        console.log('Session Commands:');
+        console.log('  sessions        - List all sessions');
+        console.log('  create          - Create new session');
+        console.log('  send <text>     - Send message to current session');
+        console.log('  reset           - Reset current session');
+        console.log('');
+        console.log('Tool Commands:');
         console.log('  tools           - List available tools');
+        console.log('  invoke <name> <json-args> - Invoke tool');
+        console.log('');
+        console.log('Quick Shortcuts:');
         console.log('  echo <text>     - Echo text via shell');
         console.log('  ls              - List files');
         console.log('  pwd             - Print working directory');
         console.log('  screenshot      - Take screenshot');
         console.log('  test-safety     - Test dangerous command blocking');
+        console.log('');
+        console.log('Other:');
         console.log('  raw <json>      - Send raw JSON');
         console.log('  quit            - Exit\n');
         rl.prompt();
@@ -52,8 +128,16 @@ function connect() {
     ws.on('message', (data) => {
         try {
             const msg = JSON.parse(data.toString());
-            console.log('\n← Response:');
-            console.log(JSON.stringify(msg, null, 2));
+            
+            // Handle session.created to store sessionId
+            if (msg.type === 'session.created') {
+                currentSessionId = msg.payload.sessionId;
+                console.log(`\n✓ Session created: ${currentSessionId}`);
+            }
+            
+            // Pretty print response
+            console.log(`\n← ${msg.type}:`);
+            console.log(JSON.stringify(msg.payload, null, 2));
             console.log('');
             rl.prompt();
         } catch (err) {
@@ -91,23 +175,53 @@ rl.on('line', (line) => {
     if (input.startsWith('raw ')) {
         try {
             message = JSON.parse(input.slice(4));
+            ws.send(JSON.stringify({
+                id: nanoid(),
+                type: message.type,
+                timestamp: Date.now(),
+                payload: message.payload || {}
+            }));
+            console.log(`→ Sent: ${message.type}`);
         } catch (err) {
             console.log('✗ Invalid JSON');
-            rl.prompt();
-            return;
         }
-    } else if (input.startsWith('echo ')) {
-        message = commands.echo(input.slice(5));
-    } else if (commands[input]) {
-        message = commands[input]();
-    } else {
-        console.log('✗ Unknown command. Type "status", "tools", "echo <text>", "ls", "pwd", "screenshot", "test-safety", or "raw <json>"');
         rl.prompt();
         return;
     }
     
-    console.log('→ Sending:', JSON.stringify(message));
-    ws.send(JSON.stringify(message));
+    if (input.startsWith('send ')) {
+        commands.send(input.slice(5));
+        rl.prompt();
+        return;
+    }
+    
+    if (input.startsWith('echo ')) {
+        commands.echo(input.slice(5));
+        rl.prompt();
+        return;
+    }
+    
+    if (input.startsWith('invoke ')) {
+        const parts = input.slice(7).split(' ');
+        const toolName = parts[0];
+        const argsJson = parts.slice(1).join(' ');
+        try {
+            const args = argsJson ? JSON.parse(argsJson) : {};
+            commands.invoke(toolName, args);
+        } catch (err) {
+            console.log('✗ Invalid JSON args');
+        }
+        rl.prompt();
+        return;
+    }
+    
+    if (commands[input]) {
+        commands[input]();
+    } else {
+        console.log('✗ Unknown command. Type a command or "quit" to exit.');
+    }
+    
+    rl.prompt();
 });
 
 rl.on('close', () => {
