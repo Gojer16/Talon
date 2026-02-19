@@ -5,6 +5,60 @@ All notable changes to Talon will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-02-19
+
+### ✨ Added
+
+#### Gateway v0.3.3 - Production Ready
+- **`talon gateway` Command**: New dedicated command for gateway-only mode (WebSocket server without CLI)
+- **Desktop Screenshot Tool**: Cross-platform desktop screenshot capture (macOS/Linux/Windows)
+  - `desktop_screenshot` tool with optional base64 encoding
+  - Automatic platform detection (screencapture, scrot, PowerShell)
+- **Comprehensive Test Suite**: End-to-end gateway testing script
+  - Tests WebSocket connection, session management, tool execution, safety checks
+  - Run with `npm run test:gateway`
+- **Quick Start Guide**: Complete deployment and testing documentation (`docs/QUICKSTART.md`)
+- **Implementation Tracking**: Detailed progress tracking document (`docs/19fbIMPLEMENTATION.md`)
+
+#### WebSocket Protocol Documentation
+- Formal protocol specification with all event types
+- Client → Server events: `gateway.status`, `session.create`, `session.send_message`, `tools.invoke`, etc.
+- Server → Client events: `session.message.delta`, `session.message.final`, `tools.result`, etc.
+- Example payloads for all events
+
+#### Tools
+- **27+ Tools Registered**: Complete tool registry with safety checks
+- **Safety Checks**: Dangerous command blocking (rm -rf, sudo, curl|sh, etc.)
+- **Tool Categories**: File, shell, web, browser, memory, productivity, Apple integrations
+
+### 🔧 Changed
+- **Version Bump**: Updated to v0.3.3 across all components
+- **Gateway Banner**: Updated to show v0.3.3
+- **Health Endpoint**: Returns v0.3.3 in status response
+- **CLI Help**: Updated with `gateway` command documentation
+
+### 📚 Documentation
+- **Implementation Guide**: Complete audit and implementation tracking
+- **Quick Start Guide**: Step-by-step deployment instructions
+- **Protocol Specification**: Formal WebSocket event schema
+- **Test Guide**: How to verify all features
+
+### 🧪 Testing
+- **E2E Test Script**: Comprehensive gateway testing (`scripts/test-gateway-e2e.js`)
+- **Test Coverage**: Gateway startup, WebSocket, sessions, tools, safety, HTTP endpoints
+- **npm Scripts**: Added `npm run test:gateway` and updated `npm run test:all`
+
+### 🎯 Production Readiness
+- ✅ Gateway daemon with graceful shutdown
+- ✅ WebSocket server with stable protocol
+- ✅ Session persistence (file-based)
+- ✅ Streaming responses with delta chunks
+- ✅ Tool execution with safety checks
+- ✅ Subagent routing (5 subagents)
+- ✅ Shadow Loop (proactive intelligence)
+- ✅ HTTP health and status endpoints
+- ✅ Comprehensive documentation
+
 ## [Unreleased]
 
 ### ✨ Added
