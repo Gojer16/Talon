@@ -148,7 +148,7 @@ describe('WebSocket Protocol', () => {
 
             expect(response.type).toBe('gateway.status');
             expect(response.payload).toHaveProperty('status');
-            expect(response.payload).toHaveProperty('version', '0.3.3');
+            expect(response.payload).toHaveProperty('version', '0.4.0');
             expect(response.payload).toHaveProperty('uptime');
             expect(response.payload).toHaveProperty('components');
             expect(response.payload).toHaveProperty('stats');

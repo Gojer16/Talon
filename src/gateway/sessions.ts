@@ -11,6 +11,7 @@ import type { Session, SessionState, InboundMessage, Message } from '../utils/ty
 import type { TalonConfig } from '../config/schema.js';
 import type { EventBus } from './events.js';
 import { VectorMemory, SimpleEmbeddingProvider, OpenAIEmbeddingProvider } from '../memory/vector.js';
+import { SqliteStore } from '../storage/sqlite.js';
 
 const SESSIONS_DIR = path.join(TALON_HOME, 'sessions');
 
@@ -20,11 +21,21 @@ export class SessionManager {
     private groupIndex = new Map<string, string>();   // groupId → sessionId
     private idleTimers = new Map<string, NodeJS.Timeout>();
     private vectorMemory: VectorMemory | null = null;
+    private store: SqliteStore;
 
     constructor(
         private config: TalonConfig,
         private eventBus: EventBus,
     ) {
+        // Initialize SQLite store
+        this.store = new SqliteStore();
+        
+        // Migrate existing file-based sessions
+        const migrated = this.store.migrateFromFiles(SESSIONS_DIR);
+        if (migrated > 0) {
+            logger.info({ count: migrated }, 'Migrated sessions from files to SQLite');
+        }
+        
         // Initialize vector memory if enabled
         if (config.vectorMemory?.enabled) {
             const provider = config.vectorMemory.provider === 'openai' && process.env.OPENAI_API_KEY
@@ -181,20 +192,16 @@ export class SessionManager {
         let session = this.sessions.get(sessionId);
 
         if (!session) {
-            // Load from disk
-            const filePath = path.join(SESSIONS_DIR, `${sessionId}.json`);
-            if (!fs.existsSync(filePath)) {
+            // Load from SQLite
+            const loaded = this.store.getSession(sessionId);
+            
+            if (!loaded) {
                 throw new SessionError(`Session not found: ${sessionId}`);
             }
 
-            try {
-                const content = fs.readFileSync(filePath, 'utf-8');
-                session = JSON.parse(content) as Session;
-                this.sessions.set(sessionId, session);
-                this.senderIndex.set(session.senderId, sessionId);
-            } catch (err) {
-                throw new SessionError(`Failed to load session: ${sessionId}`, { cause: err });
-            }
+            session = loaded;
+            this.sessions.set(sessionId, session);
+            this.senderIndex.set(session.senderId, sessionId);
         }
 
         session.state = 'active';
@@ -210,10 +217,8 @@ export class SessionManager {
     // ─── Persistence ──────────────────────────────────────────────
 
     persistSession(session: Session): void {
-        const filePath = path.join(SESSIONS_DIR, `${session.id}.json`);
-
         try {
-            fs.writeFileSync(filePath, JSON.stringify(session, null, 2), 'utf-8');
+            this.store.saveSession(session);
         } catch (err) {
             logger.error({ sessionId: session.id, err }, 'Failed to persist session');
         }
@@ -226,7 +231,7 @@ export class SessionManager {
         for (const session of this.sessions.values()) {
             this.persistSession(session);
         }
-        logger.info(`Persisted ${this.sessions.size} sessions`);
+        logger.info(`Persisted ${this.sessions.size} sessions to SQLite`);
     }
 
     // ─── Cleanup ──────────────────────────────────────────────────
@@ -237,5 +242,6 @@ export class SessionManager {
         }
         this.idleTimers.clear();
         this.persistAll();
+        this.store.close();
     }
 }

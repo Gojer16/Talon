@@ -1,6 +1,6 @@
 {
     "name": "talon",
-    "version": "0.3.3",
+    "version": "0.4.0",
     "description": "Personal AI assistant — local-first, multi-channel, with agent loop and memory compression",
     "type": "module",
     "main": "dist/gateway/index.js",
@@ -36,7 +36,7 @@
         "@inquirer/prompts": "^8.2.1",
         "@types/chokidar": "^1.7.5",
         "@types/puppeteer": "^5.4.7",
-        "better-sqlite3": "^11.0.0",
+        "better-sqlite3": "^11.10.0",
         "chalk": "^5.6.2",
         "chokidar": "^5.0.0",
         "cli-highlight": "^2.1.11",
@@ -63,7 +63,7 @@
     },
     "devDependencies": {
         "@testing-library/react": "^14.3.1",
-        "@types/better-sqlite3": "^7.6.11",
+        "@types/better-sqlite3": "^7.6.13",
         "@types/inquirer": "^9.0.9",
         "@types/jsdom": "^27.0.0",
         "@types/node": "^22.10.5",
