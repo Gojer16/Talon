@@ -19,16 +19,23 @@ async function main(): Promise<void> {
         }
 
         case 'gateway':
-        case 'start': {
+        case 'start':
+        case 'dashboard': {
             const isDaemon = flags.includes('--daemon') || flags.includes('-d');
             const isGatewayOnly = command === 'gateway';
+            const isDashboard = command === 'dashboard';
             const forceStart = flags.includes('--force') || flags.includes('-f');
 
             // Check for running gateway using new process manager
             const { isGatewayRunning } = await import('../gateway/process-manager.js');
             const status = await isGatewayRunning();
 
-            if (status.running && !forceStart) {
+            if (isDashboard) {
+                console.log('🦅 Talon Dashboard');
+                console.log('Checking gateway status...');
+            }
+
+            if (status.running && !forceStart && !isDashboard) {
                 console.log(`⚠️  Talon gateway already running`);
                 console.log(`   PID: ${status.pid}`);
                 console.log(`   Version: ${status.version || 'unknown'}`);
@@ -52,6 +59,81 @@ async function main(): Promise<void> {
                 await new Promise(r => setTimeout(r, 1000));
             }
 
+            // If dashboard command and gateway not running, start it
+            if (isDashboard && !status.running) {
+                console.log('Gateway: not running');
+                console.log('Starting gateway...');
+                
+                // Start gateway in background
+                const { spawn } = await import('node:child_process');
+                const gatewayProcess = spawn(process.argv[0], [process.argv[1], 'gateway'], {
+                    detached: true,
+                    stdio: 'ignore'
+                });
+                gatewayProcess.unref();
+                
+                // Wait for health check
+                console.log('Waiting for health check...');
+                let healthy = false;
+                for (let i = 0; i < 30; i++) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    try {
+                        const res = await fetch('http://127.0.0.1:19789/api/health', {
+                            signal: AbortSignal.timeout(2000),
+                        });
+                        if (res.ok) {
+                            healthy = true;
+                            break;
+                        }
+                    } catch {
+                        // Keep waiting
+                    }
+                }
+                
+                if (!healthy) {
+                    console.log('❌ Gateway failed to start');
+                    process.exit(1);
+                }
+                
+                console.log('Health: OK');
+            } else if (isDashboard && status.running) {
+                console.log(`Gateway: running (pid ${status.pid})`);
+            }
+
+            // If dashboard command, open browser and exit
+            if (isDashboard) {
+                const url = 'http://127.0.0.1:19789';
+                console.log(`Dashboard: ${url}`);
+                console.log('Opening browser...');
+                
+                // Open browser
+                const { exec } = await import('node:child_process');
+                const platform = process.platform;
+                let openCmd: string;
+                
+                if (platform === 'darwin') {
+                    openCmd = `open "${url}"`;
+                } else if (platform === 'win32') {
+                    openCmd = `start "${url}"`;
+                } else {
+                    openCmd = `xdg-open "${url}"`;
+                }
+                
+                exec(openCmd, (err) => {
+                    if (err) {
+                        console.log(`⚠️  Could not open browser automatically`);
+                        console.log(`   Please open: ${url}`);
+                    } else {
+                        console.log('✓ Dashboard opened');
+                    }
+                    process.exit(0);
+                });
+                
+                // Wait for browser to open
+                await new Promise(r => setTimeout(r, 2000));
+                process.exit(0);
+            }
+
             if (isDaemon || isGatewayOnly) {
                 // Suppress logs in daemon mode
                 process.env.LOG_LEVEL = 'silent';
@@ -63,7 +145,7 @@ async function main(): Promise<void> {
             await import('../gateway/index.js');
 
             if (isDaemon || isGatewayOnly) {
-                console.log('🦅 Talon Gateway v0.3.3 started');
+                console.log('🦅 Talon Gateway v0.4.0 started');
                 console.log('   HTTP:      http://127.0.0.1:19789');
                 console.log('   WebSocket: ws://127.0.0.1:19789/ws');
                 console.log('   Use `talon health` to check status');
