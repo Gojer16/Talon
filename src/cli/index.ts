@@ -18,58 +18,59 @@ async function main(): Promise<void> {
             break;
         }
 
+        case 'gateway':
         case 'start': {
             const isDaemon = flags.includes('--daemon') || flags.includes('-d');
-            
-            // Check for running gateway
-            try {
-                const { execSync } = await import('child_process');
-                const lsofOutput = execSync('lsof -ti :19789 2>/dev/null || true', { encoding: 'utf-8' }).trim();
-                
-                if (lsofOutput) {
-                    const pids = lsofOutput.split('\n').filter(Boolean);
-                    
-                    // Verify these are actually Talon processes
-                    const talonPids: string[] = [];
-                    for (const pid of pids) {
-                        try {
-                            const cmdline = execSync(`ps -p ${pid} -o command= 2>/dev/null || true`, { encoding: 'utf-8' }).trim();
-                            if (cmdline.toLowerCase().includes('talon') || cmdline.toLowerCase().includes('gateway')) {
-                                talonPids.push(pid);
-                            }
-                        } catch {
-                            // Ignore
-                        }
-                    }
-                    
-                    if (talonPids.length > 0) {
-                        console.log(`⚠️  Talon gateway already running (PID: ${talonPids.join(', ')})`);
-                        console.log('   Run `talon stop` first, or use `talon restart`');
-                        process.exit(1);
-                    }
-                }
-            } catch {
-                // Ignore - no gateway running
+            const isGatewayOnly = command === 'gateway';
+            const forceStart = flags.includes('--force') || flags.includes('-f');
+
+            // Check for running gateway using new process manager
+            const { isGatewayRunning } = await import('../gateway/process-manager.js');
+            const status = await isGatewayRunning();
+
+            if (status.running && !forceStart) {
+                console.log(`⚠️  Talon gateway already running`);
+                console.log(`   PID: ${status.pid}`);
+                console.log(`   Version: ${status.version || 'unknown'}`);
+                console.log(`   Uptime: ${Math.round(status.uptime || 0)}s`);
+                console.log('');
+                console.log('   Run `talon stop` first, or use `talon restart`');
+                console.log('   Or use `--force` to stop and restart');
+                process.exit(1);
             }
-            
-            if (isDaemon) {
+
+            if (forceStart && status.running) {
+                console.log('🔄 Force restart requested, stopping old gateway...');
+                const { stopGateway } = await import('../gateway/process-manager.js');
+                const result = await stopGateway(true);
+                if (!result.success) {
+                    console.log(`❌ Failed to stop old gateway: ${result.message}`);
+                    process.exit(1);
+                }
+                console.log('✓ Old gateway stopped');
+                // Wait a moment for port to be freed
+                await new Promise(r => setTimeout(r, 1000));
+            }
+
+            if (isDaemon || isGatewayOnly) {
                 // Suppress logs in daemon mode
                 process.env.LOG_LEVEL = 'silent';
                 // Disable CLI channel
                 process.env.TALON_CLI_ENABLED = 'false';
             }
-            
+
             // Import and boot the gateway (it runs boot() automatically)
             await import('../gateway/index.js');
-            
-            if (isDaemon) {
-                console.log('🦅 Talon started in daemon mode');
-                console.log('   Gateway: http://127.0.0.1:19789');
+
+            if (isDaemon || isGatewayOnly) {
+                console.log('🦅 Talon Gateway v0.3.3 started');
+                console.log('   HTTP:      http://127.0.0.1:19789');
+                console.log('   WebSocket: ws://127.0.0.1:19789/ws');
                 console.log('   Use `talon health` to check status');
             }
-            
+
             // Keep process alive - gateway handles its own lifecycle
-            await new Promise(() => {});
+            await new Promise(() => { });
             break;
         }
 
@@ -84,8 +85,8 @@ async function main(): Promise<void> {
                 console.log(`  Status:     ${data.status === 'ok' ? '✅ OK' : '❌ Error'}`);
                 console.log(`  Version:    ${data.version}`);
                 console.log(`  Uptime:     ${Math.round(data.uptime)}s`);
-                console.log(`  Sessions:   ${data.sessions}`);
-                console.log(`  WS Clients: ${data.wsClients}`);
+                console.log(`  Sessions:   ${data.stats?.sessions ?? 0}`);
+                console.log(`  WS Clients: ${data.stats?.wsClients ?? 0}`);
             } catch {
                 console.log('❌ Talon is not running.');
                 console.log('   Run `talon start` to start the gateway.');
@@ -94,28 +95,46 @@ async function main(): Promise<void> {
         }
 
         case 'status': {
-            try {
-                const [health, sessions] = await Promise.all([
-                    fetch('http://127.0.0.1:19789/api/health', { signal: AbortSignal.timeout(5000) }).then(r => r.json()),
-                    fetch('http://127.0.0.1:19789/api/sessions', { signal: AbortSignal.timeout(5000) }).then(r => r.json()),
-                ]);
-
-                console.log('🦅 Talon Status');
-                console.log('─────────────────────');
-                console.log(`  Gateway:  ${health.status === 'ok' ? '✅ Running' : '❌ Error'}`);
-                console.log(`  Uptime:   ${Math.round(health.uptime)}s`);
-                console.log(`  Sessions: ${sessions.length}`);
-
-                if (sessions.length > 0) {
+            const { getGatewayStatus } = await import('../gateway/process-manager.js');
+            const status = await getGatewayStatus();
+            
+            console.log('🦅 Talon Gateway Status');
+            console.log('─────────────────────────');
+            
+            if (status.running) {
+                console.log(`  Status:   ✅ Running`);
+                console.log(`  PID:      ${status.pid}`);
+                console.log(`  Version:  ${status.version || 'unknown'}`);
+                console.log(`  Uptime:   ${Math.round(status.uptime || 0)}s`);
+                console.log(`  Port:     ${status.port}`);
+                console.log(`  Config:   ${status.configPath || 'N/A'}`);
+                
+                if (status.stale) {
                     console.log('');
-                    console.log('  Active Sessions:');
-                    for (const s of sessions as Array<{ id: string; channel: string; state: string; messageCount: number }>) {
-                        console.log(`    • ${s.id} [${s.channel}] ${s.state} (${s.messageCount} msgs)`);
-                    }
+                    console.log('  ⚠️  Warning: PID file is stale or missing');
+                    console.log('     Consider running `talon restart`');
                 }
-            } catch {
-                console.log('❌ Talon is not running.');
+                
+                // Check version mismatch
+                const packageJson = JSON.parse(fs.readFileSync('./package.json', 'utf-8'));
+                if (status.version && status.version !== packageJson.version) {
+                    console.log('');
+                    console.log(`  ⚠️  Version mismatch!`);
+                    console.log(`     Running: ${status.version}`);
+                    console.log(`     Built:   ${packageJson.version}`);
+                    console.log('     Run `talon restart` to update');
+                }
+            } else {
+                console.log(`  Status:   ❌ Not running`);
+                console.log('');
+                console.log('  Run `talon gateway` to start');
             }
+            break;
+        }
+
+        case 'debug:process': {
+            const { debugProcess } = await import('../gateway/process-manager.js');
+            await debugProcess();
             break;
         }
 
@@ -125,121 +144,92 @@ async function main(): Promise<void> {
             console.log(`
 🦅 Talon — Personal AI Assistant
 
-Usage: talon <command>
+Usage: talon <command> [options]
 
 Commands:
-  setup        Run the onboarding wizard (auto-detects running gateways)
-  tui          Connect to running gateway (Ink edition - NEW!)
-  tui-legacy   Connect to running gateway (legacy readline)
-  provider     Add/change AI provider
-  switch    Switch between configured models
-  start     Start the gateway server (prevents duplicates)
-  stop      Stop any running gateway (safe process detection)
-  restart   Restart the daemon
-  health    Check if the gateway is running
-  status    Show detailed status and sessions
-  service   Manage system service (install/uninstall/start/stop/restart/status)
+  setup              Run the onboarding wizard
+  gateway            Start gateway server only (WebSocket only)
+  tui                Connect to running gateway (text interface)
+  provider           Add/change AI provider
+  switch             Switch between configured models
+  start              Start the gateway server with CLI
+  stop [--force]     Stop running gateway (--force to kill)
+  restart            Restart the gateway
+  health             Check if the gateway is running
+  status             Show detailed gateway status
+  debug:process      Debug process management (PID, port, health)
+  service            Manage system service
+
+Options:
+  --force, -f        Force stop/restart (SIGKILL)
+  --daemon, -d       Run in background
 
 Examples:
-  talon setup           # First-time setup (stops old gateways)
-  talon tui             # Interactive chat (NEW Ink TUI!)
-  talon tui-legacy      # Legacy readline TUI
-  talon provider        # Add/change AI provider
-  talon switch          # Switch model
-  talon start           # Start gateway (checks for duplicates)
-  talon stop            # Stop all Talon gateways safely
-  talon start --daemon  # Start as background service
-  talon service install # Install as system service
-  talon health          # Quick health check
-  talon status          # Detailed status
+  talon gateway           # Start gateway-only mode
+  talon start --force     # Force restart if already running
+  talon stop --force      # Force kill gateway
+  talon restart           # Graceful restart
+  talon status            # Show PID, version, uptime
+  talon debug:process     # Debug process issues
       `);
             break;
         }
 
         case 'stop': {
-            // Stop daemon via PID file or any running gateway
-            const { isDaemonRunning, getDaemonConfig, removePidFile } = await import('../scripts/daemon.js');
-            const config = getDaemonConfig();
+            const forceStop = flags.includes('--force') || flags.includes('-f');
+            const { stopGateway } = await import('../gateway/process-manager.js');
             
-            let stopped = false;
+            const result = await stopGateway(forceStop);
             
-            // Try daemon first
-            if (isDaemonRunning(config)) {
-                try {
-                    const pid = parseInt(fs.readFileSync(config.pidFile, 'utf-8').trim(), 10);
-                    process.kill(pid, 'SIGTERM');
-                    console.log('✓ Talon daemon stopping...');
-                    setTimeout(() => {
-                        removePidFile(config);
-                        console.log('✓ Talon daemon stopped');
-                    }, 2000);
-                    stopped = true;
-                } catch {
-                    console.log('✗ Failed to stop daemon');
-                }
-            }
-            
-            // Try to kill any running gateway process by port
-            try {
-                const { execSync } = await import('child_process');
-                // Find process listening on port 19789
-                const lsofOutput = execSync('lsof -ti :19789 2>/dev/null || true', { encoding: 'utf-8' }).trim();
-                if (lsofOutput) {
-                    const pids = lsofOutput.split('\n').filter(Boolean);
-                    
-                    // Verify these are Talon processes before killing
-                    for (const pid of pids) {
-                        try {
-                            const cmdline = execSync(`ps -p ${pid} -o command= 2>/dev/null || true`, { encoding: 'utf-8' }).trim();
-                            // Only kill if it's a Talon process
-                            if (cmdline.toLowerCase().includes('talon') || cmdline.toLowerCase().includes('gateway')) {
-                                process.kill(parseInt(pid, 10), 'SIGTERM');
-                                if (!stopped) {
-                                    console.log('✓ Stopped running gateway');
-                                    stopped = true;
-                                }
-                            }
-                        } catch {
-                            // Ignore
-                        }
-                    }
-                }
-            } catch {
-                // Ignore - no process found
-            }
-            
-            if (!stopped) {
-                console.log('ℹ Talon is not running');
+            if (result.success) {
+                console.log(`✓ ${result.message}`);
+            } else {
+                console.log(`✗ ${result.message}`);
+                process.exit(1);
             }
             break;
         }
 
         case 'restart': {
-            // Restart: stop then start
-            const { isDaemonRunning, getDaemonConfig, removePidFile, startDaemon } = await import('../scripts/daemon.js');
-            const config = getDaemonConfig();
+            console.log('🔄 Restarting Talon gateway...');
             
-            if (isDaemonRunning(config)) {
-                try {
-                    const pid = parseInt(fs.readFileSync(config.pidFile, 'utf-8').trim(), 10);
-                    process.kill(pid, 'SIGTERM');
-                    await new Promise(r => setTimeout(r, 2000));
-                } catch {
-                    // Ignore errors
+            const { stopGateway, isGatewayRunning } = await import('../gateway/process-manager.js');
+            
+            // Stop if running
+            const status = await isGatewayRunning();
+            if (status.running) {
+                console.log('   Stopping old gateway...');
+                const result = await stopGateway(true);
+                if (!result.success) {
+                    console.log(`   ✗ Failed to stop: ${result.message}`);
+                    process.exit(1);
                 }
+                console.log('   ✓ Stopped');
+                // Wait for port to be freed
+                await new Promise(r => setTimeout(r, 1000));
             }
             
-            console.log('Starting Talon...');
-            process.argv = ['node', 'talon', 'start', '--daemon'];
+            // Start new gateway
+            console.log('   Starting new gateway...');
+            process.argv = ['node', 'talon', 'gateway'];
+            process.env.LOG_LEVEL = 'silent';
+            process.env.TALON_CLI_ENABLED = 'false';
+            
             await import('../gateway/index.js');
-            console.log('Talon restarted');
+            
+            console.log('✓ Talon gateway restarted');
+            console.log('   HTTP:      http://127.0.0.1:19789');
+            console.log('   WebSocket: ws://127.0.0.1:19789/ws');
+            
+            // Keep process alive
+            await new Promise(() => { });
             break;
         }
 
         case 'service': {
             const { installService, uninstallService, restartService, serviceStatus, stopService, startService } = await import('./service.js');
             const subcommand = flags[0];
-            
+
             switch (subcommand) {
                 case 'install':
                     await installService();
@@ -267,12 +257,7 @@ Examples:
         }
 
         case 'tui': {
-            const { startInkTUI } = await import('../tui/index.js');
-            await startInkTUI();
-            break;
-        }
-
-        case 'tui-legacy': {
+            console.log('Starting Interactive TUI (Readline)...');
             const { startTUI } = await import('./tui.js');
             await startTUI();
             break;
