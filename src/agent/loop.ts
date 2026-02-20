@@ -101,7 +101,8 @@ export class AgentLoop {
         if (!tool) {
             throw new Error(`Tool not found: ${toolName}`);
         }
-        return await tool.execute(args);
+        const { normalizeToolExecution } = await import('../tools/normalize.js');
+        return await normalizeToolExecution(toolName, tool.execute.bind(tool), args);
     }
 
     /**
