@@ -1,231 +1,203 @@
-// ─── File Tools Tests ──────────────────────────────────────────────
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { AgentLoop } from '../../src/agent/loop.js';
+import { ModelRouter } from '../../src/agent/router.js';
+import { MemoryManager } from '../../src/memory/manager.js';
+import { MemoryCompressor } from '../../src/memory/compressor.js';
+import { EventBus } from '../../src/gateway/events.js';
+import { registerAllTools } from '../../src/tools/registry.js';
+import type { TalonConfig } from '../../src/config/schema.js';
+import type { NormalizedToolResult } from '../../src/tools/normalize.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 
-// Mock file tools - will be replaced with real implementation
-interface FileToolResult {
-    success: boolean;
-    content?: string;
-    error?: string;
-}
-
-class MockFileTools {
-    async read(filePath: string): Promise<FileToolResult> {
-        try {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            return { success: true, content };
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    }
-
-    async write(filePath: string, content: string): Promise<FileToolResult> {
-        try {
-            fs.writeFileSync(filePath, content, 'utf-8');
-            return { success: true };
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    }
-
-    async list(dirPath: string): Promise<FileToolResult> {
-        try {
-            const files = fs.readdirSync(dirPath);
-            return { success: true, content: JSON.stringify(files) };
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    }
-
-    async search(dirPath: string, pattern: string): Promise<FileToolResult> {
-        try {
-            const files = fs.readdirSync(dirPath);
-            const matches = files.filter(f => f.includes(pattern));
-            return { success: true, content: JSON.stringify(matches) };
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    }
-}
-
-describe('File Tools', () => {
-    let fileTools: MockFileTools;
+describe('File Tools Comprehensive', () => {
+    let agentLoop: AgentLoop;
     let testDir: string;
-    let testFile: string;
 
-    beforeEach(() => {
-        fileTools = new MockFileTools();
-        testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'talon-test-'));
-        testFile = path.join(testDir, 'test.txt');
+    beforeAll(async () => {
+        testDir = path.join(os.tmpdir(), `talon-file-test-${Date.now()}`);
+        fs.mkdirSync(testDir, { recursive: true });
+
+        const config: TalonConfig = {
+            workspace: { root: testDir },
+            agent: { model: 'test', maxIterations: 5, subagentModel: 'test', providers: {} },
+            tools: {
+                files: {
+                    enabled: true,
+                    allowedPaths: [testDir],
+                    deniedPaths: [path.join(testDir, 'denied')],
+                    maxFileSize: 1048576,
+                },
+                shell: { enabled: false, defaultTimeout: 5000, maxOutputSize: 10000, blockedCommands: [], confirmDestructive: false },
+                browser: { enabled: false },
+            },
+            memory: { compaction: { enabled: false, keepRecentMessages: 10 } },
+            channels: { cli: { enabled: true }, telegram: { enabled: false }, whatsapp: { enabled: false } },
+            gateway: { host: '127.0.0.1', port: 19789, token: null },
+            hooks: { bootMd: { enabled: false } },
+            shadow: { enabled: false, watchPaths: [], ignorePatterns: [] },
+        } as TalonConfig;
+
+        const eventBus = new EventBus();
+        const modelRouter = new ModelRouter(config);
+        const memoryManager = new MemoryManager({ workspaceRoot: testDir, maxContextTokens: 6000, maxSummaryTokens: 800, keepRecentMessages: 10 });
+        const memoryCompressor = new MemoryCompressor(modelRouter);
+        agentLoop = new AgentLoop(modelRouter, memoryManager, memoryCompressor, eventBus, { maxIterations: 5 });
+        registerAllTools(agentLoop, config);
     });
 
-    afterEach(() => {
-        // Cleanup
-        if (fs.existsSync(testDir)) {
-            fs.rmSync(testDir, { recursive: true, force: true });
-        }
+    afterAll(() => {
+        if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
     });
 
     describe('file_read', () => {
-        it('should read existing file', async () => {
-            fs.writeFileSync(testFile, 'Hello World', 'utf-8');
-
-            const result = await fileTools.read(testFile);
-
-            expect(result.success).toBe(true);
-            expect(result.content).toBe('Hello World');
+        it('should read entire file', async () => {
+            const file = path.join(testDir, 'read-test.txt');
+            fs.writeFileSync(file, 'Line 1\nLine 2\nLine 3');
+            
+            const result = await agentLoop.executeTool('file_read', { path: file });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
+            expect(parsed.data).toContain('Line 1');
+            expect(parsed.data).toContain('Line 3');
         });
 
-        it('should handle non-existent file', async () => {
-            const result = await fileTools.read('/non/existent/file.txt');
-
-            expect(result.success).toBe(false);
-            expect(result.error).toBeDefined();
+        it('should read file with line range', async () => {
+            const file = path.join(testDir, 'range-test.txt');
+            fs.writeFileSync(file, 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5');
+            
+            const result = await agentLoop.executeTool('file_read', { path: file, startLine: 2, endLine: 4 });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
+            expect(parsed.data).toContain('Line 2');
+            expect(parsed.data).toContain('Line 4');
+            expect(parsed.data).not.toContain('Line 1');
+            expect(parsed.data).not.toContain('Line 5');
         });
 
-        it('should read empty file', async () => {
-            fs.writeFileSync(testFile, '', 'utf-8');
-
-            const result = await fileTools.read(testFile);
-
-            expect(result.success).toBe(true);
-            expect(result.content).toBe('');
+        it('should reject denied paths', async () => {
+            const deniedDir = path.join(testDir, 'denied');
+            fs.mkdirSync(deniedDir, { recursive: true });
+            const file = path.join(deniedDir, 'secret.txt');
+            fs.writeFileSync(file, 'secret');
+            
+            const result = await agentLoop.executeTool('file_read', { path: file });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(false);
+            expect(parsed.error?.message).toContain('Access denied');
         });
 
-        it('should read large file', async () => {
-            const largeContent = 'A'.repeat(10000);
-            fs.writeFileSync(testFile, largeContent, 'utf-8');
+        it('should handle missing files', async () => {
+            const result = await agentLoop.executeTool('file_read', { path: path.join(testDir, 'missing.txt') });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(false);
+            expect(parsed.error?.message).toContain('not found');
+        });
 
-            const result = await fileTools.read(testFile);
-
-            expect(result.success).toBe(true);
-            expect(result.content?.length).toBe(10000);
+        it('should reject directories', async () => {
+            const result = await agentLoop.executeTool('file_read', { path: testDir });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(false);
+            expect(parsed.error?.message).toContain('directory');
         });
     });
 
     describe('file_write', () => {
-        it('should write to new file', async () => {
-            const result = await fileTools.write(testFile, 'Test content');
-
-            expect(result.success).toBe(true);
-            expect(fs.existsSync(testFile)).toBe(true);
-            expect(fs.readFileSync(testFile, 'utf-8')).toBe('Test content');
+        it('should create new file', async () => {
+            const file = path.join(testDir, 'new-file.txt');
+            const result = await agentLoop.executeTool('file_write', { path: file, content: 'New content' });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
+            expect(fs.existsSync(file)).toBe(true);
+            expect(fs.readFileSync(file, 'utf-8')).toBe('New content');
         });
 
         it('should overwrite existing file', async () => {
-            fs.writeFileSync(testFile, 'Old content', 'utf-8');
-
-            const result = await fileTools.write(testFile, 'New content');
-
-            expect(result.success).toBe(true);
-            expect(fs.readFileSync(testFile, 'utf-8')).toBe('New content');
+            const file = path.join(testDir, 'overwrite.txt');
+            fs.writeFileSync(file, 'Old content');
+            
+            const result = await agentLoop.executeTool('file_write', { path: file, content: 'New content' });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
+            expect(fs.readFileSync(file, 'utf-8')).toBe('New content');
         });
 
-        it('should write empty content', async () => {
-            const result = await fileTools.write(testFile, '');
-
-            expect(result.success).toBe(true);
-            expect(fs.readFileSync(testFile, 'utf-8')).toBe('');
+        it('should create parent directories', async () => {
+            const file = path.join(testDir, 'nested', 'deep', 'file.txt');
+            const result = await agentLoop.executeTool('file_write', { path: file, content: 'Deep content' });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
+            expect(fs.existsSync(file)).toBe(true);
         });
 
-        it('should handle invalid path', async () => {
-            const result = await fileTools.write('/invalid/path/file.txt', 'content');
-
-            expect(result.success).toBe(false);
-            expect(result.error).toBeDefined();
+        it('should handle empty content', async () => {
+            const file = path.join(testDir, 'empty.txt');
+            const result = await agentLoop.executeTool('file_write', { path: file, content: '' });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
+            expect(fs.readFileSync(file, 'utf-8')).toBe('');
         });
     });
 
     describe('file_list', () => {
-        it('should list files in directory', async () => {
-            fs.writeFileSync(path.join(testDir, 'file1.txt'), 'content1');
-            fs.writeFileSync(path.join(testDir, 'file2.txt'), 'content2');
-
-            const result = await fileTools.list(testDir);
-
-            expect(result.success).toBe(true);
-            const files = JSON.parse(result.content!);
-            expect(files).toContain('file1.txt');
-            expect(files).toContain('file2.txt');
+        it('should list directory contents', async () => {
+            fs.writeFileSync(path.join(testDir, 'file1.txt'), 'a');
+            fs.writeFileSync(path.join(testDir, 'file2.txt'), 'b');
+            fs.mkdirSync(path.join(testDir, 'subdir'), { recursive: true });
+            
+            const result = await agentLoop.executeTool('file_list', { path: testDir });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
+            expect(parsed.data).toContain('file1.txt');
+            expect(parsed.data).toContain('file2.txt');
+            expect(parsed.data).toContain('subdir');
         });
 
-        it('should list empty directory', async () => {
-            const result = await fileTools.list(testDir);
-
-            expect(result.success).toBe(true);
-            const files = JSON.parse(result.content!);
-            expect(files).toEqual([]);
-        });
-
-        it('should handle non-existent directory', async () => {
-            const result = await fileTools.list('/non/existent/dir');
-
-            expect(result.success).toBe(false);
-            expect(result.error).toBeDefined();
+        it('should handle empty directory', async () => {
+            const emptyDir = path.join(testDir, 'empty-dir');
+            fs.mkdirSync(emptyDir, { recursive: true });
+            
+            const result = await agentLoop.executeTool('file_list', { path: emptyDir });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
         });
     });
 
     describe('file_search', () => {
-        it('should find matching files', async () => {
-            fs.writeFileSync(path.join(testDir, 'test1.txt'), 'content');
-            fs.writeFileSync(path.join(testDir, 'test2.txt'), 'content');
-            fs.writeFileSync(path.join(testDir, 'other.md'), 'content');
-
-            const result = await fileTools.search(testDir, 'test');
-
-            expect(result.success).toBe(true);
-            const matches = JSON.parse(result.content!);
-            expect(matches).toContain('test1.txt');
-            expect(matches).toContain('test2.txt');
-            expect(matches).not.toContain('other.md');
+        beforeAll(() => {
+            fs.writeFileSync(path.join(testDir, 'search1.txt'), 'Hello World\nFoo Bar');
+            fs.writeFileSync(path.join(testDir, 'search2.txt'), 'Hello Universe\nBaz Qux');
+            fs.writeFileSync(path.join(testDir, 'search3.txt'), 'Goodbye World');
         });
 
-        it('should return empty array when no matches', async () => {
-            fs.writeFileSync(path.join(testDir, 'file.txt'), 'content');
-
-            const result = await fileTools.search(testDir, 'nomatch');
-
-            expect(result.success).toBe(true);
-            const matches = JSON.parse(result.content!);
-            expect(matches).toEqual([]);
+        it('should find pattern in files', async () => {
+            const result = await agentLoop.executeTool('file_search', { path: testDir, pattern: 'Hello' });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
+            expect(parsed.data).toContain('search1.txt');
+            expect(parsed.data).toContain('search2.txt');
         });
 
-        it('should handle case-sensitive search', async () => {
-            fs.writeFileSync(path.join(testDir, 'Test.txt'), 'content');
-            fs.writeFileSync(path.join(testDir, 'test.txt'), 'content');
-
-            const result = await fileTools.search(testDir, 'Test');
-
-            expect(result.success).toBe(true);
-            const matches = JSON.parse(result.content!);
-            expect(matches).toContain('Test.txt');
-        });
-    });
-
-    describe('Path Safety', () => {
-        it('should handle relative paths', async () => {
-            const relativePath = path.join(testDir, './test.txt');
-            const result = await fileTools.write(relativePath, 'content');
-
-            expect(result.success).toBe(true);
-        });
-
-        it('should handle paths with spaces', async () => {
-            const fileWithSpace = path.join(testDir, 'file with spaces.txt');
-            const result = await fileTools.write(fileWithSpace, 'content');
-
-            expect(result.success).toBe(true);
-            expect(fs.existsSync(fileWithSpace)).toBe(true);
-        });
-
-        it('should handle unicode filenames', async () => {
-            const unicodeFile = path.join(testDir, '文件.txt');
-            const result = await fileTools.write(unicodeFile, 'content');
-
-            expect(result.success).toBe(true);
-            expect(fs.existsSync(unicodeFile)).toBe(true);
+        it('should handle no matches', async () => {
+            const result = await agentLoop.executeTool('file_search', { path: testDir, pattern: 'NONEXISTENT_PATTERN_XYZ' });
+            const parsed: NormalizedToolResult = JSON.parse(result);
+            
+            expect(parsed.success).toBe(true);
+            // May return "No matches" or empty results
+            expect(parsed.data).toBeDefined();
         });
     });
 });
