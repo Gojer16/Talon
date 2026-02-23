@@ -98,6 +98,16 @@ async function boot(): Promise<void> {
 
     logger.info({ model: subagentModel }, 'Subagents initialized');
 
+    // Register vector memory semantic search (if enabled)
+    if (config.vectorMemory?.enabled) {
+        const vectorMemory = sessionManager.getVectorMemory();
+        if (vectorMemory) {
+            const { createMemorySearchSemanticTool } = await import('../tools/memory-search-semantic-tool.js');
+            agentLoop.registerTool(createMemorySearchSemanticTool(vectorMemory));
+            logger.info('Vector memory semantic search enabled');
+        }
+    }
+
     // 4. Create server (with agent loop reference)
     const server = new TalonServer(config, eventBus, sessionManager, router, agentLoop);
 

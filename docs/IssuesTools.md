@@ -66,13 +66,15 @@ AI agents should read `src/tools/README.md` and this file before modifying any t
 - **Resolution**: The file is NOT dead code. It normalizes tool output for WebSocket direct tool calls, wrapping results with timing, success/error status, and metadata. The README description was misleading - tools don't call it themselves; the agent loop wraps tool execution with it for direct WebSocket calls.
 
 ### TOOL-005: `memory-search-semantic-tool.ts` is dead code (never registered)
-- [ ] **Severity**: 🟡 Medium
-- **File**: `src/tools/memory-search-semantic-tool.ts` (56 lines), `src/tools/registry.ts`
+- [x] **Severity**: 🟡 Medium — **RESOLVED**
+- **File**: `src/tools/memory-search-semantic-tool.ts` (55 lines), `src/gateway/index.ts`
 - **Problem**: `createMemorySearchSemanticTool` is not imported or registered in `registry.ts`. It requires a `VectorMemory` instance but is never wired up.
-- **Fix**: Either:
-  - **(A)** Wire it up in `registry.ts` (requires `VectorMemory` from `src/memory/vector.ts` to be initialized)
-  - **(B)** Mark as `[PLANNED]` in README if vector memory is not yet production-ready
-  - **(C)** Remove if deprecated
+- **Fix Applied**: Added vector memory semantic search initialization to `src/gateway/index.ts`:
+  1. Checks if `config.vectorMemory?.enabled` is true
+  2. Gets `VectorMemory` instance from `sessionManager.getVectorMemory()`
+  3. Registers `memory_search_semantic` tool if vector memory is available
+  4. Logs "Vector memory semantic search enabled"
+  5. Tool allows semantic search over conversation history with natural language queries
 
 ---
 
@@ -322,7 +324,7 @@ For agents picking up this work, here's the recommended order:
 ### Phase 3 — Dead Code & Consistency ✅ COMPLETED
 12. ~~`TOOL-003` — Wire up or remove subagent-tool.ts~~ ✅
 13. ~~`TOOL-004` — Wire up or remove normalize.ts~~ ✅ (clarified usage)
-14. `TOOL-005` — Wire up or remove memory-search-semantic-tool.ts
+14. ~~`TOOL-005` — Wire up or remove memory-search-semantic-tool.ts~~ ✅
 15. `TOOL-029` — Standardize output format
 16. ~~`TOOL-030` — Remove duplicate escapeAppleScript~~ ✅
 
@@ -368,20 +370,20 @@ For agents picking up this work, here's the recommended order:
 | `src/tools/scratchpad.ts` | 115 | ✅ Fixed | ~~TOOL-027~~ |
 | `src/tools/normalize.ts` | 60 | ✅ Used by executeTool | ~~TOOL-004~~ |
 | `src/tools/subagent-tool.ts` | 53 | ✅ Fixed | ~~TOOL-003~~, ~~TOOL-028~~ |
-| `src/tools/memory-search-semantic-tool.ts` | 55 | ⚪ Dead code | TOOL-005 |
-| `src/tools/registry.ts` | 118 | ✅ Functional | ~~TOOL-003~~, TOOL-005 (missing registrations) |
+| `src/tools/memory-search-semantic-tool.ts` | 55 | ✅ Wired up | ~~TOOL-005~~ |
+| `src/tools/registry.ts` | 118 | ✅ Functional | ~~TOOL-003~~, ~~TOOL-005~~ (missing registrations) |
 | `src/tools/README.md` | 487 | ✅ Updated | ~~TOOL-001, TOOL-006, TOOL-007, TOOL-008, TOOL-009~~ |
 
 ---
 
 ## 8. Summary
 
-**Completed Fixes (Phase 1, 2, 3, 4):** 31 issues resolved
+**Completed Fixes (Phase 1, 2, 3, 4):** 32 issues resolved
 - Critical: TOOL-002, TOOL-025, TOOL-017, TOOL-010
 - High: TOOL-011, TOOL-013, TOOL-016, ~~TOOL-003~~
-- Medium: TOOL-012, TOOL-014, TOOL-015, TOOL-018, TOOL-019, TOOL-020, TOOL-021, TOOL-022, TOOL-023, TOOL-024, TOOL-026, TOOL-030, ~~TOOL-027~~, ~~TOOL-028~~, ~~TOOL-004~~
+- Medium: TOOL-012, TOOL-014, TOOL-015, TOOL-018, TOOL-019, TOOL-020, TOOL-021, TOOL-022, TOOL-023, TOOL-024, TOOL-026, TOOL-030, ~~TOOL-027~~, ~~TOOL-028~~, ~~TOOL-004~~, ~~TOOL-005~~
 - Documentation: ~~TOOL-001~~, ~~TOOL-006~~, ~~TOOL-007~~, ~~TOOL-008~~, ~~TOOL-009~~
 
 **Remaining Issues:**
-- Phase 3 (Dead Code): TOOL-005 (memory-search-semantic-tool.ts), TOOL-029 (output format inconsistency)
+- Phase 3 (Consistency): TOOL-029 (output format inconsistency)
 - Phase 5 (Testing): TOOL-031 (validation tests), TOOL-032 (missing test files)
