@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import readline from 'node:readline';
 import path from 'node:path';
 import { formatAIResponse, Spinner } from './utils.js';
+import { processResponse } from '../../utils/strip-tags.js';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -26,6 +27,8 @@ export interface RendererOptions {
     responseTimeoutMs?: number;
     /** Current model name for display */
     currentModel?: string;
+    /** Show raw tool outputs (default: false for clean UX) */
+    showToolOutputs?: boolean;
 }
 
 // ─── Renderer ────────────────────────────────────────────────────
@@ -48,6 +51,7 @@ export class TerminalRenderer {
     private spinner = new Spinner('Thinking');
 
     public currentModel = 'unknown';
+    public showToolOutputs = false;
 
     constructor(
         /** Callback to re-show the prompt after output */
@@ -58,6 +62,7 @@ export class TerminalRenderer {
         if (options?.currentModel) {
             this.currentModel = options.currentModel;
         }
+        this.showToolOutputs = options?.showToolOutputs ?? false;
     }
 
     // ─── Public API ──────────────────────────────────────────────
@@ -246,12 +251,17 @@ export class TerminalRenderer {
             // LLM produced a response — show it
             this.printResponse(this.responseBuffer);
         } else if (this.toolResultsBuffer.length > 0) {
-            // No LLM text, but we have tool results — show them as fallback
-            this.printToolResults('Talon (Tool Results)');
+            // Tools ran but no response - show helpful message
+            console.log(chalk.yellow('\n⚠️  Talon used tools but didn\'t provide an answer.'));
+            console.log(chalk.dim('   Try asking: "What did you find?" or "Summarize the results"'));
+            if (this.showToolOutputs) {
+                console.log(chalk.dim('   Or showing raw tool outputs since debug mode is ON:\n'));
+                this.printToolResults('Tool Results (Debug Mode)');
+            }
         } else {
             // Nothing at all
-            console.log(chalk.yellow('\n⚠ Talon completed but produced no output.'));
-            console.log(chalk.dim('  The AI may have had trouble processing. Try rephrasing your request.'));
+            console.log(chalk.yellow('\n⚠️  Talon completed but produced no output.'));
+            console.log(chalk.dim('   The AI may have had trouble processing. Try rephrasing your request.'));
         }
 
         this.finishResponse();
@@ -261,7 +271,26 @@ export class TerminalRenderer {
 
     /** Print a boxed response from the AI */
     private printResponse(text: string): void {
-        const formatted = formatAIResponse(text);
+        // Layer 1: Process response (strip tags, sanitize)
+        let processed = processResponse(text);
+        
+        // Layer 2: Format for terminal
+        let formatted = formatAIResponse(processed);
+        
+        // Layer 3: Detect if still looks like raw tool output (fallback check)
+        if (!this.showToolOutputs) {
+            const toolPatterns = ['apple_safari_', 'web_fetch:', 'shell_execute:', 'file_read:', 'file_write:'];
+            const looksLikeToolOutput = toolPatterns.some(pattern => formatted.includes(pattern));
+            
+            if (looksLikeToolOutput && formatted.length > 500) {
+                // This is raw tool output - don't show it
+                console.log(chalk.yellow('\n⚠️  Talon returned raw tool outputs instead of an answer.'));
+                console.log(chalk.dim('   Try asking: "Summarize that in plain English"'));
+                console.log(chalk.dim('   Or enable debug mode with /debug to see raw outputs'));
+                return;
+            }
+        }
+        
         const modelName = this.currentModel.split('/').pop() || this.currentModel;
 
         console.log(chalk.gray('╭─ Talon ─────────────────────'));
