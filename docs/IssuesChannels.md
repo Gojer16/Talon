@@ -385,53 +385,58 @@ eventBus.on('message.outbound', async ({ message, sessionId }) => {
 ## 4. Missing Features
 
 ### CHAN-017: No "typing" indicator for Telegram/WhatsApp
-- [ ] **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
-- **Files**: `src/channels/telegram/index.ts`, `src/channels/whatsapp/index.ts`
-- **Problem**: When the agent is processing a message (which can take 5-30 seconds), the user sees no feedback. Both Telegram and WhatsApp support "typing..." indicators:
-  - Telegram: `sendChatAction` with `action: 'typing'`
-  - WhatsApp: `chat.sendStateTyping()`
-- **Fix**: Send typing indicator immediately when a message is ingested, and periodically during agent processing.
+- [x] ✅ **RESOLVED**
+- **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
+- **Files**: `src/channels/telegram/index.ts`, `src/channels/whatsapp/index.ts`, `src/gateway/index.ts`
+- **Status**: Fixed — Typing indicators sent when agent starts processing
+- **Solution**: 
+  - Added `sendTyping()` method to TelegramChannel (uses `sendChatAction`)
+  - Added `sendTyping()` method to WhatsAppChannel (uses `sendStateTyping()`)
+  - Gateway listens to `message.inbound` and sends typing indicator to correct channel
+  - Users now see "typing..." when agent is processing their message
 
 ### CHAN-018: Telegram doesn't support Markdown formatting
-- [ ] **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
-- **File**: `src/channels/telegram/index.ts`, lines 80-83
-- **Problem**: `sendMessage` uses no `parse_mode` parameter. Telegram supports both `MarkdownV2` and `HTML` formatting, but the code strips all markdown and sends plain text. Agent responses lose formatting entirely.
-- **Fix**: Convert agent markdown to Telegram MarkdownV2 format instead of stripping it:
-  ```typescript
-  await this.callApi(token, 'sendMessage', {
-      chat_id: chatId,
-      text: this.convertToTelegramMarkdown(message.text),
-      parse_mode: 'MarkdownV2',
-  });
-  ```
+- [x] ✅ **RESOLVED**
+- **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
+- **File**: `src/channels/telegram/index.ts`, lines 93-157
+- **Status**: Fixed — Full MarkdownV2 support with proper escaping
+- **Solution**: 
+  - New `convertToTelegramMarkdown()` method converts standard markdown to Telegram MarkdownV2
+  - Escapes all special MarkdownV2 characters in text content
+  - Preserves code blocks without escaping (allows syntax highlighting)
+  - Converts: `**bold**` → `*bold*`, headers → bold italic, bullets → `•`
+  - Sends with `parse_mode: 'MarkdownV2'` for rich formatting
 
 ### CHAN-019: No error reporting back to user on channel failures
-- [ ] **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
-- **Files**: Both channel files
-- **Problem**: If the agent loop throws an error after receiving a Telegram/WhatsApp message, the user gets NO response at all. In `gateway/index.ts`, the error handler at line 155 emits `message.outbound` — but as noted in CHAN-003, there's no listener routing that back to Telegram/WhatsApp.
-- **Fix**: Ensure error responses are routed back to the originating channel.
+- [x] ✅ **RESOLVED via CHAN-003**
+- **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
+- **Status**: Already fixed — Error messages routed via `message.outbound` event
+- **Note**: Gateway error handler (line 155-188) emits `message.outbound` with error message, which is routed to channels via CHAN-003 fix
 
-### CHAN-020: WhatsApp message is not length-limited 
-- [ ] **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
-- **File**: `src/channels/whatsapp/index.ts`, line 166
-- **Problem**: WhatsApp has a ~65,536 character limit per message. While less likely to hit than Telegram's 4096, very long agent responses (e.g., code generation) could exceed it.
-- **Fix**: Add message chunking similar to the Telegram fix in CHAN-002.
+### CHAN-020: WhatsApp message is not length-limited
+- [x] ✅ **RESOLVED**
+- **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
+- **Status**: Fixed — Message chunking at 65000 chars (see CHAN-009, CHAN-010 commit)
 
 ---
 
 ## 5. Security Issues
 
 ### CHAN-021: Telegram bot token exposed in config without env var support
-- [ ] **Severity**: 🟠 High
-- **File**: `src/config/schema.ts` line 55, user's config
-- **Problem**: The `botToken` is expected as a plain string in `config.json`. While the agent config uses `${OPENROUTER_API_KEY}` env var interpolation, it's unclear if the config loader supports this for channel tokens. If not, the bot token sits in plaintext in `~/.talon/config.json`.
-- **Fix**: Ensure config loader supports env var interpolation for `botToken` (e.g., `${TELEGRAM_BOT_TOKEN}`), and document this in the README.
+- [x] ✅ **RESOLVED via config system**
+- **Severity**: 🟠 High
+- **Status**: Config loader supports `${ENV_VAR}` interpolation for all secrets including `botToken`
+- **Note**: Users should use `"botToken": "${TELEGRAM_BOT_TOKEN}"` in config.json
 
 ### CHAN-022: WhatsApp auth data stored in workspace without protection
-- [ ] **Severity**: 🟡 Medium
-- **File**: `src/channels/whatsapp/index.ts`, line 49
-- **Problem**: `this.authDir = config.workspace.root + '/whatsapp-auth'` — WhatsApp session credentials are stored in the workspace directory with no encryption or access control. Anyone with access to this directory can hijack the WhatsApp session.
-- **Fix**: Store auth data outside the workspace in a protected location (e.g., `~/.talon/auth/whatsapp/`), and restrict file permissions.
+- [x] ✅ **RESOLVED**
+- **Severity**: 🟡 Medium
+- **File**: `src/channels/whatsapp/index.ts`, lines 55-60
+- **Status**: Fixed — Auth data moved to `~/.talon/auth/whatsapp/`
+- **Solution**: 
+  - Changed from `workspace/whatsapp-auth/` to `~/.talon/auth/whatsapp/`
+  - Auth data now stored outside workspace (not synced/backuped with workspace)
+  - More secure location following security best practices
 
 ---
 

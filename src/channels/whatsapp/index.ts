@@ -51,7 +51,12 @@ export class WhatsAppChannel extends BaseChannel {
 
     constructor(config: any, eventBus: any, sessionManager: any, router: any) {
         super(config, eventBus, sessionManager, router);
-        this.authDir = `${config.workspace.root}/whatsapp-auth`;
+        // CHAN-022: Store auth data in secure location outside workspace
+        // Use ~/.talon/auth/whatsapp/ instead of workspace/whatsapp-auth/
+        const os = require('os');
+        const path = require('path');
+        const homeDir = os.homedir();
+        this.authDir = path.join(homeDir, '.talon', 'auth', 'whatsapp');
     }
 
     public async start(): Promise<void> {
@@ -164,6 +169,18 @@ export class WhatsAppChannel extends BaseChannel {
             logger.info('Stopping WhatsApp client...');
             await this.client.destroy();
             this.isReady = false;
+        }
+    }
+
+    // CHAN-017: Send typing indicator
+    public async sendTyping(chatId: string): Promise<void> {
+        if (!this.isReady || !this.client) return;
+
+        try {
+            const chat = await this.client.getChatById(chatId);
+            await chat.sendStateTyping();
+        } catch (err) {
+            logger.debug({ err, chatId }, 'Failed to send WhatsApp typing indicator');
         }
     }
 

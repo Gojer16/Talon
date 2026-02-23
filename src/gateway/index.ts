@@ -314,6 +314,24 @@ async function boot(): Promise<void> {
         }
     });
 
+    // CHAN-017: Wire typing indicators - send when agent starts processing
+    eventBus.on('message.inbound', async ({ message, sessionId }) => {
+        const session = sessionManager.getSession(sessionId);
+        if (!session) return;
+
+        // Send typing indicator to the channel
+        for (const channel of channels) {
+            if (channel.name === session.channel && 'sendTyping' in channel) {
+                try {
+                    await (channel as any).sendTyping(session.senderId);
+                } catch (err) {
+                    logger.debug({ err, channel: channel.name }, 'Failed to send typing indicator');
+                }
+                break;
+            }
+        }
+    });
+
     logger.info({ channelCount: channels.length }, 'All channels started with outbound routing');
 
     // 8. Graceful shutdown

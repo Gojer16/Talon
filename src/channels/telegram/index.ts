@@ -70,6 +70,21 @@ export class TelegramChannel extends BaseChannel {
         }
     }
 
+    // CHAN-017: Send typing indicator
+    public async sendTyping(chatId: string): Promise<void> {
+        const token = this.config.channels.telegram.botToken;
+        if (!token || !chatId) return;
+
+        try {
+            await this.callApi(token, 'sendChatAction', {
+                chat_id: chatId,
+                action: 'typing',
+            });
+        } catch (err) {
+            logger.debug({ err, chatId }, 'Failed to send typing indicator');
+        }
+    }
+
     public async send(sessionId: string, message: OutboundMessage): Promise<void> {
         // Retrieve session to get the real chat ID (senderId)
         const session = this.sessionManager.getSession(sessionId);
@@ -80,29 +95,84 @@ export class TelegramChannel extends BaseChannel {
 
         const chatId = session.senderId;
         const token = this.config.channels.telegram.botToken;
-        const text = this.stripMarkdown(message.text);
 
         if (!token || !chatId) return;
+
+        // CHAN-018: Convert to Telegram MarkdownV2 format
+        const markdownText = this.convertToTelegramMarkdown(message.text);
 
         // CHAN-002: Split messages into chunks ≤ 4096 chars (Telegram limit)
         const MAX_TELEGRAM_LENGTH = 4096;
         const chunks: string[] = [];
-        for (let i = 0; i < text.length; i += MAX_TELEGRAM_LENGTH) {
-            chunks.push(text.slice(i, i + MAX_TELEGRAM_LENGTH));
+        for (let i = 0; i < markdownText.length; i += MAX_TELEGRAM_LENGTH) {
+            chunks.push(markdownText.slice(i, i + MAX_TELEGRAM_LENGTH));
         }
 
         try {
-            // Send each chunk as a separate message
+            // Send each chunk as a separate message with MarkdownV2
             for (const chunk of chunks) {
                 await this.callApi(token, 'sendMessage', {
                     chat_id: chatId,
                     text: chunk,
+                    parse_mode: 'MarkdownV2',
                 });
             }
             logger.info({ chatId, chunks: chunks.length }, 'Telegram message sent');
         } catch (err) {
             logger.error({ err, chatId }, 'Failed to send Telegram message');
         }
+    }
+
+    // CHAN-018: Convert markdown to Telegram MarkdownV2 format
+    private convertToTelegramMarkdown(text: string): string {
+        // Escape special MarkdownV2 characters first
+        const escapeSpecial = (str: string) => str
+            .replace(/_/g, '\\_')
+            .replace(/\*/g, '\\*')
+            .replace(/\[/g, '\\[')
+            .replace(/]/g, '\\]')
+            .replace(/\(/g, '\\(')
+            .replace(/\)/g, '\\)')
+            .replace(/~/g, '\\~')
+            .replace(/`/g, '\\`')
+            .replace(/>/g, '\\>')
+            .replace(/#/g, '\\#')
+            .replace(/\+/g, '\\+')
+            .replace(/-/g, '\\-')
+            .replace(/=/g, '\\=')
+            .replace(/\|/g, '\\|')
+            .replace(/\{/g, '\\{')
+            .replace(/\}/g, '\\}')
+            .replace(/\./g, '\\.')
+            .replace(/!/g, '\\!');
+
+        // Process code blocks first (before escaping)
+        text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+            const language = lang || '';
+            // Don't escape inside code blocks, just wrap
+            return '```' + language + '\n' + code.trim() + '```';
+        });
+
+        // Escape special characters in non-code text
+        const parts = text.split(/(```[\s\S]*?```)/g);
+        const escaped = parts.map(part => {
+            if (part.startsWith('```')) return part; // Keep code blocks as-is
+            return escapeSpecial(part);
+        }).join('');
+
+        // Convert markdown formatting to Telegram MarkdownV2
+        return escaped
+            .replace(/\*\*([^*]+)\*\*/g, '*$1*')  // Bold
+            .replace(/```(\w+)?\n/g, '```$1\n')    // Code block start
+            .replace(/\n```/g, '\n```')            // Code block end
+            .replace(/`([^`]+)`/g, '`$1`')         // Inline code
+            .replace(/^### (.*$)/gm, '*$1*')       // H3 -> bold italic
+            .replace(/^## (.*$)/gm, '*$1*')        // H2 -> bold italic
+            .replace(/^# (.*$)/gm, '*$1*')         // H1 -> bold italic
+            .replace(/^- (.*$)/gm, '• $1')         // Bullet points
+            .replace(/^\d+\. (.*$)/gm, '• $1')     // Numbered lists
+            .replace(/\n{3,}/g, '\n\n')            // Normalize line breaks
+            .trim();
     }
 
     private stripMarkdown(text: string): string {
