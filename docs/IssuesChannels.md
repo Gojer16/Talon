@@ -256,18 +256,14 @@ eventBus.on('message.outbound', async ({ message, sessionId }) => {
 ## 2. Functional Bugs
 
 ### CHAN-006: Telegram group mention check is a TODO
-- [ ] **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No (DMs work fine)
-- **File**: `src/channels/telegram/index.ts`, lines 156-162
-- **Problem**: Lines 157-161 have a `// TODO: Implement proper mention check` comment. When `groupActivation` is `'mention'`, the code does NOTHING — it falls through and processes all group messages. This means in "mention" mode, the bot responds to every group message (acting like "always" mode).
-- **Fix**: Implement actual mention detection:
-  ```typescript
-  if (activation === 'mention') {
-      const botUsername = await this.getBotUsername(token);
-      const isMentioned = msg.text?.includes(`@${botUsername}`) || false;
-      const isCommand = msg.text?.startsWith('/') || false;
-      if (!isMentioned && !isCommand) return; // Ignore
-  }
-  ```
+- [x] ✅ **RESOLVED**
+- **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No (DMs work fine)
+- **File**: `src/channels/telegram/index.ts`, lines 181-189
+- **Status**: Fixed — Bot now fetches username on start and checks mentions in groups
+- **Solution**: 
+  - Fetch bot username via `getMe` API on startup
+  - Check for `@botname` mentions or `/commands` in mention mode
+  - Ignore group messages without mentions when `groupActivation: 'mention'`
 
 ### CHAN-007: Telegram `allowedUsers` compares user IDs inconsistently
 - [ ] **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
@@ -277,19 +273,14 @@ eventBus.on('message.outbound', async ({ message, sessionId }) => {
 - **Fix**: Document clearly whether `allowedUsers` expects numeric IDs (e.g., `"123456789"`) or usernames (e.g., `"@john"`). Add validation in the channel or schema.
 
 ### CHAN-008: Telegram polling error backoff is fixed 5s, not exponential
-- [ ] **Severity**: 🟢 Low | **Blocks Today?**: ✅ No
-- **File**: `src/channels/telegram/index.ts`, line 128
-- **Problem**: README line 189 says "3 retries with exponential backoff (2s, 4s, 8s)" but the actual code has a fixed `setTimeout(resolve, 5000)` on ALL polling errors. No retry counter, no exponential growth, no max retries.
-- **Fix**: Implement actual exponential backoff:
-  ```typescript
-  private errorCount = 0;
-  // In catch block:
-  this.errorCount++;
-  const delay = Math.min(5000 * Math.pow(2, this.errorCount - 1), 60000);
-  await new Promise(resolve => setTimeout(resolve, delay));
-  // Reset on success:
-  this.errorCount = 0;
-  ```
+- [x] ✅ **RESOLVED**
+- **Severity**: 🟢 Low | **Blocks Today?**: ✅ No
+- **File**: `src/channels/telegram/index.ts`, lines 148-153
+- **Status**: Fixed — Exponential backoff implemented (2s, 4s, 8s, 16s, 32s, max 60s)
+- **Solution**: 
+  - Track `errorCount` on polling errors
+  - Calculate delay: `Math.min(2000 * Math.pow(2, this.errorCount - 1), 60000)`
+  - Reset `errorCount` on successful poll
 
 ### CHAN-009: WhatsApp has no reconnection logic
 - [ ] **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No (first connection works)

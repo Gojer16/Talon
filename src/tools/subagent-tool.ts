@@ -15,12 +15,19 @@ export function createSubagentTool(registry: SubagentRegistry) {
             required: ['type', 'description'],
         },
         async execute(args: Record<string, unknown>): Promise<string> {
-            const result = await registry.execute({
-                type: args.type as SubagentType,
-                description: args.description as string,
-                context: args.context as Record<string, any> | undefined,
-            });
-            return JSON.stringify({ summary: result.summary, data: result.data, confidence: result.confidence }, null, 2);
+            try {
+                const result = await registry.execute({
+                    type: args.type as SubagentType,
+                    description: args.description as string,
+                    context: args.context as Record<string, any> | undefined,
+                });
+                return JSON.stringify({ success: true, summary: result.summary, data: result.data, confidence: result.confidence }, null, 2);
+            } catch (err) {
+                return JSON.stringify({
+                    success: false,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            }
         },
     };
 }

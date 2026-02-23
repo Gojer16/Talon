@@ -37,11 +37,13 @@ Core modules:
 
 State management: Stateless tool execution (pure functions), stateful browser instances (BrowserTools), platform detection for Apple tools, permission caching with TTL for Apple apps.
 
-Data flow: Agent request → tool lookup → Zod schema validation → safety checks → platform detection → permission check → external call → BulletproofOutput JSON → agent response.
+Data flow: Agent request → tool lookup → parameter validation (Zod for Apple tools, web, shell, browser, notes, tasks, memory, screenshot; JSON schema for file/memory) → safety checks → platform detection → permission check → external call → result formatting (BulletproofOutput JSON for Apple tools, plain strings for others) → agent response.
+
+Note: Apple tools use Zod schemas with `BulletproofOutput` JSON responses. Most other tools now use Zod validation but return plain string results. Legacy tools use JSON schema validation defined in tool registration.
 
 ## 4. Folder Structure Explanation
 
-**registry.ts** (200+ lines)
+**registry.ts** (118 lines)
 - What: Central tool registry and registration system
 - Why: Provides single source of truth for available tools with configuration-based enable/disable
 - Who calls: Gateway during boot phase 3 (AI Brain initialization)
@@ -49,7 +51,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Registers tools with agent loop, logs registration counts
 - Critical assumptions: Agent loop is initialized, config is valid, platform detection works
 
-**file.ts** (300+ lines)
+**file.ts** (396 lines)
 - What: File system operations (read, write, list, search)
 - Why: Allows agent to read code, configs, documents and write results
 - Who calls: Agent when user asks to read/write files
@@ -57,7 +59,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Reads/writes files, validates paths against allowed/denied lists
 - Critical assumptions: Path restrictions configured, file size limits set, permissions allow access
 
-**shell.ts** (250+ lines)
+**shell.ts** (199 lines)
 - What: Shell command execution with safety controls
 - Why: Enables running scripts, git operations, package management, tests
 - Who calls: Agent when user asks to execute commands
@@ -65,7 +67,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Executes system commands, consumes resources, may modify system
 - Critical assumptions: Commands are safe, timeout limits prevent hangs, output size limited
 
-**web.ts** (400+ lines)
+**web.ts** (516 lines)
 - What: Web search and content fetching with multi-provider fallback
 - Why: Provides internet access for research, news, information lookup
 - Who calls: Agent when user asks to search or fetch web content
@@ -73,7 +75,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Makes network requests, consumes API credits, parses HTML
 - Critical assumptions: API keys configured (except DuckDuckGo), network available, HTML parsable
 
-**browser.ts** (300+ lines)
+**browser.ts** (450 lines)
 - What: Browser automation with Puppeteer (navigate, click, type, screenshot)
 - Why: Enables web interaction beyond simple fetching (forms, JavaScript sites)
 - Who calls: Agent when user asks to interact with websites
@@ -81,7 +83,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Launches browser process, interacts with web pages, takes screenshots
 - Critical assumptions: Chrome/Chromium installed, Puppeteer works, sites allow automation
 
-**memory-tools.ts** (200+ lines)
+**memory-tools.ts** (349 lines)
 - What: Agent's own memory management (append to MEMORY.md, search memories)
 - Why: Allows agent to store and retrieve long-term knowledge
 - Who calls: Agent when it needs to remember or recall information
@@ -89,7 +91,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Updates MEMORY.md, searches memory directory
 - Critical assumptions: Workspace exists, memory files are readable/writable
 
-**notes.ts** (150+ lines)
+**notes.ts** (178 lines)
 - What: Local note management with markdown and tags
 - Why: Personal note-taking system within Talon workspace
 - Who calls: Agent when user asks to save or search notes
@@ -97,7 +99,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Creates/updates notes in ~/.talon/workspace/notes/
 - Critical assumptions: Workspace directory writable, markdown format consistent
 
-**tasks.ts** (150+ lines)
+**tasks.ts** (251 lines)
 - What: Todo list management with priorities and completion
 - Why: Personal task tracking system within Talon
 - Who calls: Agent when user asks to manage tasks
@@ -105,7 +107,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Creates/updates tasks.json in workspace
 - Critical assumptions: JSON file persists, task schema stable
 
-**apple-shared.ts** (220+ lines)
+**apple-shared.ts** (226 lines)
 - What: Shared bulletproof infrastructure for all Apple tool integrations
 - Why: DRY extraction of common patterns — output contract, validation, safe execution, permission checks
 - Who calls: All apple-*.ts tool files
@@ -113,7 +115,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Writes/cleans temp .scpt files, caches permission check results (5-min TTL)
 - Exports: `BulletproofOutput`, `formatSuccess`, `formatError`, `safeExecAppleScript`, `checkAppPermission`, `handleAppleScriptError`, `checkPlatform`, `createBaseString`, `escapeAppleScript`, `normalizeString`, `DELIMITER`
 
-**apple-safari.ts** (500+ lines)
+**apple-safari.ts** (793 lines)
 - What: macOS Safari browser integration with full bulletproofing
 - Why: Native Safari control — open URLs, get active tab, extract content, navigate history
 - Who calls: Agent on macOS when user asks to interact with Safari
@@ -121,7 +123,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Controls Safari browser, caches permissions
 - Bulletproofing: Zod schemas for all 10 Safari tools, `BulletproofOutput` JSON responses, temp file script execution
 
-**apple-calendar.ts** (730+ lines)
+**apple-calendar.ts** (735 lines)
 - What: macOS Calendar integration with full bulletproofing
 - Why: Native Apple Calendar management — create, list, delete events
 - Who calls: Agent on macOS when user asks about calendar events
@@ -129,7 +131,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Creates/modifies calendar events, caches permissions
 - Bulletproofing: Zod schemas (`CreateEventSchema`, `ListEventsSchema`, `DeleteEventSchema`), DST gap detection, idempotency checks, operation locking, `BulletproofOutput` JSON responses
 
-**apple-reminders.ts** (240+ lines)
+**apple-reminders.ts** (296 lines)
 - What: macOS Reminders integration with full bulletproofing
 - Why: Native Apple Reminders management — add, list, complete reminders
 - Who calls: Agent on macOS when user asks about reminders
@@ -137,7 +139,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Creates/modifies reminders, caches permissions
 - Bulletproofing: Zod schemas (`AddReminderSchema`, `ListRemindersSchema`, `CompleteReminderSchema`), date validation, `BulletproofOutput` JSON responses
 
-**apple-notes.ts** (180+ lines)
+**apple-notes.ts** (189 lines)
 - What: macOS Notes integration with full bulletproofing
 - Why: Native Apple Notes management — create, search notes
 - Who calls: Agent on macOS when user asks about notes
@@ -145,7 +147,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Creates notes, caches permissions
 - Bulletproofing: Zod schemas (`CreateNoteSchema`, `SearchNotesSchema`), `BulletproofOutput` JSON responses, safe delimiter output parsing
 
-**apple-mail.ts** (480+ lines)
+**apple-mail.ts** (604 lines)
 - What: macOS Mail integration with full bulletproofing
 - Why: Native Apple Mail management — list, search, read, count emails
 - Who calls: Agent on macOS when user asks about email
@@ -153,7 +155,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Reads email data, caches permissions
 - Bulletproofing: Zod schemas (`ListEmailsSchema`, `GetRecentSchema`, `SearchEmailsSchema`, `GetEmailContentSchema`, `CountEmailsSchema`), `BulletproofOutput` JSON responses, index bounds validation
 
-**screenshot.ts** (100+ lines)
+**screenshot.ts** (182 lines)
 - What: Cross-platform desktop screenshot capture
 - Why: Allows agent to see user's screen for context
 - Who calls: Agent when user asks for screenshot or screen help
@@ -161,7 +163,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Captures screen image, returns base64 or saves file
 - Critical assumptions: Platform commands available, permissions granted
 
-**subagent-tool.ts** (100+ lines)
+**subagent-tool.ts** (33 lines)
 - What: Delegation to specialized subagents (research, writer, planner, critic, summarizer)
 - Why: Enables cost-effective task specialization using cheaper models
 - Who calls: Agent when task matches subagent specialty
@@ -169,7 +171,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Creates subagent instances, makes additional LLM calls
 - Critical assumptions: Subagent registry initialized, models configured
 
-**scratchpad.ts** (80+ lines)
+**scratchpad.ts** (93 lines)
 - What: Multi-step task tracking within a single agent session
 - Why: Helps agent break down complex tasks and track progress
 - Who calls: Agent during complex multi-step operations
@@ -177,7 +179,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Maintains scratchpad state in session
 - Critical assumptions: Session supports custom metadata
 
-**normalize.ts** (50+ lines)
+**normalize.ts** (60 lines)
 - What: Tool output normalization and formatting
 - Why: Ensures consistent tool response format for agent parsing
 - Who calls: Tool implementations before returning results
@@ -185,7 +187,7 @@ Data flow: Agent request → tool lookup → Zod schema validation → safety ch
 - Side effects: Formats tool outputs consistently
 - Critical assumptions: Tool outputs are strings or stringifiable
 
-**memory-search-semantic-tool.ts** (100+ lines)
+**memory-search-semantic-tool.ts** (55 lines)
 - What: Semantic search over memory files using embeddings
 - Why: More intelligent memory recall than simple text search
 - Who calls: Agent when searching memories with semantic meaning
@@ -386,12 +388,18 @@ BrowserResult: {
 6. AppleScript testing: Run osascript commands manually
 
 **How to test locally:**
-1. Unit tests: `npx vitest run tests/unit/apple-*.test.ts` (79 tests across 4 Apple tool files)
-2. Integration: Register tools, execute with test parameters
-3. Safety testing: Attempt blocked paths/commands, verify denial
-4. Browser testing: Launch browser, navigate to test page
-5. Apple tool testing: On macOS, test with actual Apple apps
-6. Web search testing: Test each provider with simple query
+1. All unit tests: `npx vitest run tests/unit/` (200+ tests across all tool files)
+2. Apple tools: `npx vitest run tests/unit/apple-*.test.ts` (79 tests across 5 Apple tool files)
+3. File tools: `npx vitest run tests/unit/file-tools.test.ts`
+4. Shell tools: `npx vitest run tests/unit/shell-tools.test.ts`
+5. Web tools: `npx vitest run tests/unit/web-tools.test.ts`
+6. Browser tools: `npx vitest run tests/unit/browser-tools.test.ts`
+7. Memory tools: `npx vitest run tests/unit/memory-tools.test.ts`
+8. Integration: Register tools, execute with test parameters
+9. Safety testing: Attempt blocked paths/commands, verify denial
+10. Browser testing: Launch browser, navigate to test page
+11. Apple tool testing: On macOS, test with actual Apple apps
+12. Web search testing: Test each provider with simple query
 
 ## 10. AI Agent Instructions
 

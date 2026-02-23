@@ -10,17 +10,24 @@ export class PlannerSubagent extends Subagent {
 
     async execute(task: SubagentTask): Promise<SubagentResult> {
         const prompt = buildSubAgentPrompt('planner', task.description);
-        const route = this.router.getDefaultProvider();
+        const route = this.router.getProviderForTask('simple') || this.router.getDefaultProvider();
         if (!route) throw new Error('No provider available');
-        
+
         const response = await route.provider.chat([{ role: 'user', content: prompt }], { model: this.model });
         const content = response.content || '{}';
-        const data = JSON.parse(content);
+
+        let data: any;
+        try {
+            data = JSON.parse(content);
+        } catch {
+            // LLM returned prose instead of JSON — use it as raw content
+            data = { content, rawResponse: true, goal: content, steps: [] };
+        }
 
         return {
             summary: data.goal || 'Plan created',
             data: { goal: data.goal || '', steps: data.steps || [], estimatedTime: data.estimatedTime || 'Unknown', risks: data.risks || [] },
-            confidence: 0.8,
+            confidence: data.rawResponse ? 0.5 : 0.8,
         };
     }
 }

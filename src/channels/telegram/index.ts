@@ -35,6 +35,8 @@ export class TelegramChannel extends BaseChannel {
     private offset = 0;
     private isPolling = false;
     private pollingTimeout: NodeJS.Timeout | null = null;
+    private errorCount = 0;
+    private botUsername: string | null = null;
 
     public async start(): Promise<void> {
         if (!this.config.channels.telegram.enabled) {
@@ -45,6 +47,15 @@ export class TelegramChannel extends BaseChannel {
         if (!token) {
             logger.error('Telegram enabled but no bot token provided');
             return;
+        }
+
+        // Fetch bot username for mention detection in groups
+        try {
+            const botInfo = await this.callApi<{ id: number; username: string }>(token, 'getMe', {});
+            this.botUsername = botInfo.username;
+            logger.info({ username: this.botUsername }, 'Telegram bot info fetched');
+        } catch (err) {
+            logger.warn({ err }, 'Failed to fetch bot username, mention detection may not work');
         }
 
         logger.info('Starting Telegram polling...');
@@ -126,15 +137,20 @@ export class TelegramChannel extends BaseChannel {
                 allowed_updates: ['message'],
             });
 
+            // Reset error count on success
+            this.errorCount = 0;
+
             for (const update of updates) {
                 // Update offset to acknowledge processing
                 this.offset = update.update_id + 1;
                 await this.handleUpdate(update);
             }
         } catch (err) {
-            // Log error but keep polling (with backoff)
-            logger.error({ err }, 'Telegram polling error');
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            // CHAN-008: Implement exponential backoff for polling errors
+            this.errorCount++;
+            const delay = Math.min(2000 * Math.pow(2, this.errorCount - 1), 60000); // 2s, 4s, 8s, 16s, 32s, max 60s
+            logger.warn({ err, errorCount: this.errorCount, delay }, 'Telegram polling error, retrying with backoff');
+            await new Promise(resolve => setTimeout(resolve, delay));
         }
 
         // Schedule next poll immediately (or with small delay)
@@ -161,13 +177,16 @@ export class TelegramChannel extends BaseChannel {
                 // Ignore unauthorized groups
                 return;
             }
-            // Check group activation strategy
+            // CHAN-006: Implement proper mention check
             const activation = this.config.channels.telegram.groupActivation;
             if (activation === 'mention') {
-                // Check if bot is mentioned? (Need bot username for robust check)
-                // For now, simple implementation: assume all messages in allowed group are meant for bot if strict mode is off
-                // Or we can check if text starts with '/' or '@botname'
-                // TODO: Implement proper mention check
+                const isCommand = msg.text.startsWith('/');
+                const isMentioned = this.botUsername && msg.text.includes(`@${this.botUsername}`);
+                
+                if (!isMentioned && !isCommand) {
+                    logger.debug({ chatId, text: msg.text.substring(0, 50) }, 'Ignoring group message without mention');
+                    return;
+                }
             }
         } else {
             // DM

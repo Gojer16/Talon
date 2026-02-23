@@ -1,5 +1,15 @@
 // Scratchpad management tool for multi-step task tracking
 
+import { z } from 'zod';
+
+const ScratchpadActionSchema = z.enum(['add_visited', 'add_collected', 'add_pending', 'remove_pending', 'set_progress', 'clear']);
+
+const ScratchpadBaseSchema = z.object({
+    action: ScratchpadActionSchema,
+    value: z.string().optional(),
+    data: z.record(z.string(), z.any()).optional(),
+});
+
 export function createScratchpadTool() {
     return {
         name: 'scratchpad_update',
@@ -7,23 +17,38 @@ export function createScratchpadTool() {
         parameters: {
             type: 'object',
             properties: {
-                action: { 
-                    type: 'string', 
+                action: {
+                    type: 'string',
                     enum: ['add_visited', 'add_collected', 'add_pending', 'remove_pending', 'set_progress', 'clear'],
-                    description: 'Action to perform on scratchpad' 
+                    description: 'Action to perform on scratchpad'
                 },
-                value: { 
-                    type: 'string', 
-                    description: 'Value to add/remove (for add_visited, add_pending, remove_pending)' 
+                value: {
+                    type: 'string',
+                    description: 'Value to add/remove (for add_visited, add_pending, remove_pending)'
                 },
-                data: { 
-                    type: 'object', 
-                    description: 'Data to add (for add_collected) or progress state (for set_progress)' 
+                data: {
+                    type: 'object',
+                    description: 'Data to add (for add_collected) or progress state (for set_progress)'
                 },
             },
             required: ['action'],
         },
         async execute(args: Record<string, unknown>, session?: any): Promise<string> {
+            // Validate action first
+            const actionResult = ScratchpadActionSchema.safeParse(args.action);
+            if (!actionResult.success) {
+                return `Error: Invalid action. Must be one of: add_visited, add_collected, add_pending, remove_pending, set_progress, clear`;
+            }
+
+            // Validate full schema
+            const validationResult = ScratchpadBaseSchema.safeParse(args);
+            if (!validationResult.success) {
+                const errors = validationResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+                return `Error: Validation failed - ${errors}`;
+            }
+
+            const { action, value, data } = validationResult.data;
+
             if (!session) {
                 return 'Error: Session context required for scratchpad operations';
             }
@@ -37,10 +62,6 @@ export function createScratchpadTool() {
                     progress: {},
                 };
             }
-
-            const action = args.action as string;
-            const value = args.value as string;
-            const data = args.data as any;
 
             switch (action) {
                 case 'add_visited':

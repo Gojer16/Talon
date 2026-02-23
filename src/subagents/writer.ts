@@ -10,17 +10,24 @@ export class WriterSubagent extends Subagent {
 
     async execute(task: SubagentTask): Promise<SubagentResult> {
         const prompt = buildSubAgentPrompt('writer', task.description);
-        const route = this.router.getDefaultProvider();
+        const route = this.router.getProviderForTask('simple') || this.router.getDefaultProvider();
         if (!route) throw new Error('No provider available');
-        
+
         const response = await route.provider.chat([{ role: 'user', content: prompt }], { model: this.model });
         const content = response.content || '{}';
-        const data = JSON.parse(content);
+
+        let data: any;
+        try {
+            data = JSON.parse(content);
+        } catch {
+            // LLM returned prose instead of JSON — use it as raw content
+            data = { content, rawResponse: true };
+        }
 
         return {
             summary: 'Content written',
             data: { content: data.content || '', format: data.format || 'text', wordCount: data.wordCount || 0 },
-            confidence: 0.85,
+            confidence: data.rawResponse ? 0.5 : 0.85,
         };
     }
 }
