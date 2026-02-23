@@ -5,6 +5,74 @@ All notable changes to Talon will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-02-23
+
+### ✨ Added
+
+#### Channel Enhancements (CHAN-017, CHAN-018, CHAN-022, CHAN-023)
+- **Typing Indicators** (CHAN-017):
+  - Telegram: Shows "typing..." when agent processes messages
+  - WhatsApp: Shows "typing..." status during agent processing
+  - Gateway automatically sends typing on `message.inbound` event
+
+- **Telegram MarkdownV2 Support** (CHAN-018):
+  - Rich formatting for Telegram messages
+  - Bold, italic, headers, code blocks, bullet points
+  - Proper escaping of special MarkdownV2 characters
+  - Code blocks preserved with syntax highlighting
+
+- **Secure WhatsApp Auth Storage** (CHAN-022):
+  - Moved from `workspace/whatsapp-auth/` to `~/.talon/auth/whatsapp/`
+  - Auth data now outside workspace (not synced/backed up)
+  - Follows security best practices
+
+- **Unit Tests** (CHAN-023):
+  - `tests/unit/telegram-channel.test.ts` — 12 tests (100% passing)
+  - `tests/unit/whatsapp-channel.test.ts` — 13 tests (100% passing)
+  - Total: 25 channel unit tests
+
+### 🔧 Fixed
+
+#### Critical Channel Issues
+- **CHAN-001**: Config file missing channel settings
+- **CHAN-002**: Telegram message chunking (4096 char limit)
+- **CHAN-003**: Response delivery to all channels
+- **CHAN-004**: Code block content preservation
+- **CHAN-005**: WhatsApp non-blocking initialization
+- **CHAN-006**: Telegram group mention detection
+- **CHAN-007**: allowedUsers format documentation
+- **CHAN-008**: Exponential backoff for Telegram polling
+- **CHAN-009**: WhatsApp automatic reconnection
+- **CHAN-010**: WhatsApp rate limiting
+- **CHAN-011**: Line counts in README
+- **CHAN-012**: Sub-README placeholders filled
+- **CHAN-013**: Zod schema claims corrected
+- **CHAN-014**: Idempotency claims corrected
+- **CHAN-015**: Input sanitization claims corrected
+- **CHAN-020**: WhatsApp message chunking (65000 chars)
+- **CHAN-024**: Backup file removal
+
+### 📚 Documentation
+
+- **README.md**: Updated to v0.4.0 with channel setup guides
+  - Telegram setup (5 minutes)
+  - WhatsApp setup (2 minutes)
+  - Recent channel fixes summary
+
+- **src/channels/README.md**: Accurate line counts, fixed claims
+- **src/channels/telegram/README.md**: Complete module documentation
+- **src/channels/whatsapp/README.md**: Complete module documentation
+- **docs/07-CONFIGURATION.md**: Channel configuration guide
+- **docs/IssuesChannels.md**: All 24 issues marked resolved
+
+### 📊 Stats
+- **Channel Issues Fixed**: 24/24 (100%)
+- **Unit Tests Added**: 25
+- **Commits**: 15+ dedicated channel fixes
+- **Build**: ✅ Passing
+
+---
+
 ## [0.4.0] - 2026-02-19
 
 ### ✨ Added

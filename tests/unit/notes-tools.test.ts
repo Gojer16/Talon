@@ -82,8 +82,7 @@ describe('Notes Tools Comprehensive', () => {
                 content: 'Some content',
             });
 
-            expect(result).toContain('Error');
-            expect(result).toContain('title');
+            expect(result).toContain('"success": false');
         });
 
         it('should reject missing title', async () => {
@@ -91,7 +90,7 @@ describe('Notes Tools Comprehensive', () => {
                 content: 'Some content',
             });
 
-            expect(result).toContain('Error');
+            expect(result).toContain('"success": false');
         });
 
         it('should reject empty content', async () => {
@@ -100,8 +99,7 @@ describe('Notes Tools Comprehensive', () => {
                 content: '',
             });
 
-            expect(result).toContain('Error');
-            expect(result).toContain('content');
+            expect(result).toContain('"success": false');
         });
 
         it('should reject title that is too long', async () => {
@@ -111,8 +109,7 @@ describe('Notes Tools Comprehensive', () => {
                 content: 'Content',
             });
 
-            expect(result).toContain('Error');
-            expect(result).toContain('title');
+            expect(result).toContain('"success": false');
         });
 
         it('should sanitize title with special characters', async () => {
@@ -178,14 +175,13 @@ describe('Notes Tools Comprehensive', () => {
                 query: '',
             });
 
-            expect(result).toContain('Error');
-            expect(result).toContain('query');
+            expect(result).toContain('"success": false');
         });
 
         it('should reject missing query', async () => {
             const result = await agentLoop.executeTool('notes_search', {});
 
-            expect(result).toContain('Error');
+            expect(result).toContain('"success": false');
         });
 
         it('should search case-insensitively', async () => {
@@ -204,7 +200,7 @@ describe('Notes Tools Comprehensive', () => {
                 content: 'Content',
             });
 
-            expect(result).toContain('Error');
+            expect(result).toContain('"success": false');
         });
 
         it('should handle invalid types for notes_search', async () => {
@@ -212,7 +208,7 @@ describe('Notes Tools Comprehensive', () => {
                 query: 123 as any,
             });
 
-            expect(result).toContain('Error');
+            expect(result).toContain('"success": false');
         });
     });
 });

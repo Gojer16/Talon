@@ -1,6 +1,6 @@
 # Telegram Channel
 
-> **Status**: ✅ Production Ready | **Lines**: 228 | **Dependencies**: None (uses native fetch)
+> **Status**: ✅ Production Ready | **Lines**: 297 | **Dependencies**: None (uses native fetch)
 
 ## Overview
 
@@ -13,7 +13,9 @@ Lightweight Telegram bot integration using long-polling via the Telegram Bot API
 - **Group support** with mention-based activation
 - **Message chunking** for responses > 4096 characters
 - **Exponential backoff** for polling error recovery
-- **Markdown stripping** for plain text delivery
+- **MarkdownV2 formatting** with proper escaping
+- **Typing indicators** when agent is processing
+- **Code block preservation** with syntax highlighting
 
 ## Configuration
 
@@ -92,6 +94,8 @@ Agent → send() → chunking → Telegram API → User
 - ✅ **CHAN-004**: Code block content preservation
 - ✅ **CHAN-006**: Group mention detection
 - ✅ **CHAN-008**: Exponential backoff for polling errors
+- ✅ **CHAN-017**: Typing indicators
+- ✅ **CHAN-018**: MarkdownV2 formatting support
 
 ## Example Usage
 

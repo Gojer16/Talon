@@ -1,6 +1,6 @@
 # WhatsApp Channel
 
-> **Status**: ✅ Production Ready | **Lines**: 337 | **Dependencies**: `whatsapp-web.js`, `qrcode-terminal`, `puppeteer`
+> **Status**: ✅ Production Ready | **Lines**: 355 | **Dependencies**: `whatsapp-web.js`, `qrcode-terminal`, `puppeteer`
 
 ## Overview
 
@@ -15,6 +15,8 @@ Full WhatsApp Web integration using the `whatsapp-web.js` library. Provides QR c
 - **Automatic reconnection** with exponential backoff
 - **Message rate limiting** to prevent flooding
 - **Message chunking** for responses > 65000 characters
+- **Typing indicators** when agent is processing
+- **Secure auth storage** in `~/.talon/auth/whatsapp/`
 
 ## Configuration
 
@@ -124,7 +126,9 @@ Agent → send() → queue → rate limit → WhatsApp → User
 - ✅ **CHAN-005**: Non-blocking initialization
 - ✅ **CHAN-009**: Automatic reconnection logic
 - ✅ **CHAN-010**: Rate limiting for messages
+- ✅ **CHAN-017**: Typing indicators
 - ✅ **CHAN-020**: Message chunking for length limit
+- ✅ **CHAN-022**: Secure auth storage location
 
 ## Example Usage
 
