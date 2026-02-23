@@ -193,10 +193,18 @@ export class TelegramChannel extends BaseChannel {
     // ─── Polling Logic ────────────────────────────────────────────
 
     private async poll(): Promise<void> {
-        if (!this.isPolling) return;
+        if (!this.isPolling) {
+            logger.debug('Telegram polling stopped - isPolling is false');
+            return;
+        }
 
         const token = this.config.channels.telegram.botToken;
-        if (!token) return;
+        if (!token) {
+            logger.error('Telegram polling failed - no bot token in config');
+            return;
+        }
+
+        logger.debug({ offset: this.offset }, 'Telegram polling...');
 
         try {
             const updates = await this.callApi<TelegramUpdate[]>(token, 'getUpdates', {
@@ -205,12 +213,15 @@ export class TelegramChannel extends BaseChannel {
                 allowed_updates: ['message'],
             });
 
+            logger.debug({ updateCount: updates.length }, 'Telegram received updates');
+
             // Reset error count on success
             this.errorCount = 0;
 
             for (const update of updates) {
                 // Update offset to acknowledge processing
                 this.offset = update.update_id + 1;
+                logger.debug({ updateId: update.update_id }, 'Processing Telegram update');
                 await this.handleUpdate(update);
             }
         } catch (err) {
@@ -224,17 +235,30 @@ export class TelegramChannel extends BaseChannel {
         // Schedule next poll immediately (or with small delay)
         if (this.isPolling) {
             this.pollingTimeout = setTimeout(() => this.poll(), 100);
+        } else {
+            logger.debug('Telegram polling stopped after poll completion');
         }
     }
 
     private async handleUpdate(update: TelegramUpdate): Promise<void> {
         const msg = update.message;
-        if (!msg || !msg.text) return; // Only handle text messages for now
+        if (!msg || !msg.text) {
+            logger.debug({ hasMessage: !!msg, hasText: !!msg?.text }, 'Telegram update skipped - no message or text');
+            return;
+        } // Only handle text messages for now
 
         const chatId = msg.chat.id.toString();
         const userId = msg.from?.id.toString();
         const username = msg.from?.username || msg.from?.first_name || 'Unknown';
         const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+
+        logger.info({
+            chatId,
+            userId,
+            username,
+            isGroup,
+            text: msg.text.substring(0, 50),
+        }, 'Telegram message received');
 
         // Check explicit allowances
         const allowedUsers = this.config.channels.telegram.allowedUsers;
@@ -242,6 +266,7 @@ export class TelegramChannel extends BaseChannel {
 
         if (isGroup) {
             if (allowedGroups.length > 0 && !allowedGroups.includes(chatId)) {
+                logger.warn({ chatId }, 'Telegram group not in allowed list');
                 // Ignore unauthorized groups
                 return;
             }
@@ -250,7 +275,7 @@ export class TelegramChannel extends BaseChannel {
             if (activation === 'mention') {
                 const isCommand = msg.text.startsWith('/');
                 const isMentioned = this.botUsername && msg.text.includes(`@${this.botUsername}`);
-                
+
                 if (!isMentioned && !isCommand) {
                     logger.debug({ chatId, text: msg.text.substring(0, 50) }, 'Ignoring group message without mention');
                     return;
@@ -265,11 +290,15 @@ export class TelegramChannel extends BaseChannel {
             }
         }
 
+        logger.info({ chatId, username }, 'Telegram message passing authorization, ingesting...');
+
         // Ingest
         await this.ingestMessage(chatId, username, msg.text, {
             isGroup,
             groupId: isGroup ? chatId : undefined,
         });
+        
+        logger.info({ chatId }, 'Telegram message ingested successfully');
     }
 
     // ─── API Helper ───────────────────────────────────────────────
