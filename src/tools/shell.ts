@@ -1,8 +1,10 @@
 // ─── Shell Tool ───────────────────────────────────────────────────
 // shell_execute — runs commands with timeout, output truncation, and safety checks
+// Includes Zod validation for all inputs
 
 import { exec } from 'node:child_process';
 import os from 'node:os';
+import { z } from 'zod';
 import type { TalonConfig } from '../config/schema.js';
 import type { ToolDefinition } from './registry.js';
 import { logger } from '../utils/logger.js';
@@ -28,6 +30,17 @@ const DESTRUCTIVE_PATTERNS = [
 function isDestructiveCommand(cmd: string): boolean {
     return DESTRUCTIVE_PATTERNS.some(pattern => pattern.test(cmd));
 }
+
+// ─── Input Validation Schema ──────────────────────────────────────
+
+const ShellExecuteSchema = z.object({
+    command: z.string()
+        .trim()
+        .min(1, 'Command cannot be empty')
+        .max(10000, 'Command too long (max 10000 chars)'),
+    cwd: z.string().trim().optional(),
+    timeout: z.number().int().min(1).max(300000).optional(), // 1ms to 5min
+});
 
 // ─── Tool ─────────────────────────────────────────────────────────
 
@@ -55,9 +68,19 @@ export function registerShellTools(config: TalonConfig): ToolDefinition[] {
                 required: ['command'],
             },
             execute: async (args) => {
-                const command = args.command as string;
-                const cwd = (args.cwd as string) || os.homedir();
-                const timeout = (args.timeout as number) || config.tools.shell.defaultTimeout;
+                // Validate inputs
+                let command: string;
+                let cwd: string;
+                let timeout: number;
+
+                try {
+                    const parsed = ShellExecuteSchema.parse(args);
+                    command = parsed.command;
+                    cwd = parsed.cwd || os.homedir();
+                    timeout = parsed.timeout || config.tools.shell.defaultTimeout;
+                } catch (error: any) {
+                    return `Error: ${error.errors?.[0]?.message || 'Invalid parameters'}`;
+                }
 
                 // Check blocked commands
                 for (const blocked of config.tools.shell.blockedCommands) {
@@ -120,6 +143,9 @@ interface ExecResult {
 
 function executeCommand(command: string, cwd: string, timeout: number): Promise<ExecResult> {
     return new Promise((resolve, reject) => {
+        let timeoutTimer: NodeJS.Timeout | null = null;
+        let cleanupTimer: NodeJS.Timeout | null = null;
+
         const proc = exec(
             command,
             {
@@ -130,6 +156,10 @@ function executeCommand(command: string, cwd: string, timeout: number): Promise<
                 env: { ...process.env, PAGER: 'cat', GIT_PAGER: 'cat' },
             },
             (error, stdout, stderr) => {
+                // Clear both timers since process has exited
+                if (timeoutTimer) clearTimeout(timeoutTimer);
+                if (cleanupTimer) clearTimeout(cleanupTimer);
+
                 if (error && error.killed) {
                     reject(new Error(`Command timeout after ${timeout}ms`));
                     return;
@@ -143,12 +173,26 @@ function executeCommand(command: string, cwd: string, timeout: number): Promise<
             },
         );
 
-        // Cleanup on timeout
-        setTimeout(() => {
-            try {
-                proc.kill('SIGTERM');
-            } catch {
-                // Already dead
+        // Cleanup timer: sends SIGTERM after timeout, then SIGKILL if needed
+        cleanupTimer = setTimeout(() => {
+            if (proc.exitCode === null) {
+                // Process still running, try to kill it
+                try {
+                    proc.kill('SIGTERM');
+                } catch {
+                    // Already dead or can't kill
+                }
+
+                // Escalate to SIGKILL after 2 more seconds if still alive
+                setTimeout(() => {
+                    if (proc.exitCode === null) {
+                        try {
+                            proc.kill('SIGKILL');
+                        } catch {
+                            // Ignore
+                        }
+                    }
+                }, 2000);
             }
         }, timeout + 1000);
     });
