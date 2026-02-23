@@ -357,6 +357,13 @@ ChannelConfig: {
 
 ## 12. Technical Debt & TODO
 
+**Resolved Issues (2026-02-23):**
+- ✅ **CHAN-001**: Config file missing Telegram/WhatsApp settings — Fixed in `config.example.json`
+- ✅ **CHAN-002**: Telegram message splitting for 4096 char limit — Implemented chunking
+- ✅ **CHAN-003**: No response delivery to Telegram/WhatsApp — Added outbound routing in gateway
+- ✅ **CHAN-004**: Code blocks stripped entirely — Now preserves code content
+- ✅ **CHAN-005**: WhatsApp blocking boot sequence — Made initialization non-blocking
+
 **Weak areas:**
 - WhatsApp dependency heavy (Puppeteer, browser automation)
 - Telegram polling inefficient (could use webhooks)
@@ -364,6 +371,27 @@ ChannelConfig: {
 - No channel health monitoring or auto-recovery
 - Missing: WebSocket channel for web UI
 - Missing: Mobile app channels (iOS/Android)
+
+**Remaining TODOs:**
+- [ ] **CHAN-006**: Implement Telegram group mention check (currently TODO in code)
+- [ ] **CHAN-007**: Clarify allowedUsers format (numeric IDs vs usernames)
+- [ ] **CHAN-008**: Implement exponential backoff for polling errors
+- [ ] **CHAN-009**: Add WhatsApp reconnection logic
+- [ ] **CHAN-010**: Add rate limiting for WhatsApp messages
+- [ ] **CHAN-011**: Update line counts in README
+- [ ] **CHAN-012**: Fill in sub-README placeholders
+- [ ] **CHAN-013**: Add missing Zod schemas or update README claims
+- [ ] **CHAN-014**: Implement message deduplication
+- [ ] **CHAN-015**: Add input sanitization for injection prevention
+- [ ] **CHAN-016**: Implement Discord channel or mark as planned
+- [ ] **CHAN-017**: Add typing indicators for Telegram/WhatsApp
+- [ ] **CHAN-018**: Support Telegram MarkdownV2 formatting
+- [ ] **CHAN-019**: Add error reporting back to users on channel failures
+- [ ] **CHAN-020**: Add WhatsApp message chunking (65536 char limit)
+- [ ] **CHAN-021**: Add env var support for bot tokens
+- [ ] **CHAN-022**: Secure WhatsApp auth storage
+- [ ] **CHAN-023**: Write channel unit tests
+- [ ] **CHAN-024**: Remove backup file (cli/index.ts.backup)
 
 **Refactor targets:**
 - Extract platform API clients to separate modules
