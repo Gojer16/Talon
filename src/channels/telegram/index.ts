@@ -60,9 +60,6 @@ export class TelegramChannel extends BaseChannel {
     }
 
     public async send(sessionId: string, message: OutboundMessage): Promise<void> {
-        // We typically store the chatId in the session metadata or senderId
-        // The senderId for Telegram is usually the numeric chat ID as a string
-
         // Retrieve session to get the real chat ID (senderId)
         const session = this.sessionManager.getSession(sessionId);
         if (!session) {
@@ -76,11 +73,22 @@ export class TelegramChannel extends BaseChannel {
 
         if (!token || !chatId) return;
 
+        // CHAN-002: Split messages into chunks ≤ 4096 chars (Telegram limit)
+        const MAX_TELEGRAM_LENGTH = 4096;
+        const chunks: string[] = [];
+        for (let i = 0; i < text.length; i += MAX_TELEGRAM_LENGTH) {
+            chunks.push(text.slice(i, i + MAX_TELEGRAM_LENGTH));
+        }
+
         try {
-            await this.callApi(token, 'sendMessage', {
-                chat_id: chatId,
-                text,
-            });
+            // Send each chunk as a separate message
+            for (const chunk of chunks) {
+                await this.callApi(token, 'sendMessage', {
+                    chat_id: chatId,
+                    text: chunk,
+                });
+            }
+            logger.info({ chatId, chunks: chunks.length }, 'Telegram message sent');
         } catch (err) {
             logger.error({ err, chatId }, 'Failed to send Telegram message');
         }
@@ -93,7 +101,8 @@ export class TelegramChannel extends BaseChannel {
             .replace(/__([^_]+)__/g, '$1')
             .replace(/_([^_]+)_/g, '$1')
             .replace(/^#{1,6}\s+/gm, '')
-            .replace(/```[\s\S]*?```/g, '')
+            // CHAN-004: Preserve code block content instead of removing it
+            .replace(/```(?:\w+)?\n?([\s\S]*?)```/g, '$1')
             .replace(/`([^`]+)`/g, '$1')
             .replace(/^\s*[-*+]\s+/gm, '  ')
             .replace(/^\s*\d+\.\s+/gm, '  ')
