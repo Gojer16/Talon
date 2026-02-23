@@ -125,7 +125,16 @@ export class TelegramChannel extends BaseChannel {
 
     // CHAN-018: Convert markdown to Telegram MarkdownV2 format
     private convertToTelegramMarkdown(text: string): string {
-        // Escape special MarkdownV2 characters first
+        // First, extract and protect code blocks
+        const codeBlocks: string[] = [];
+        let protectedText = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+            const language = lang || '';
+            const index = codeBlocks.length;
+            codeBlocks.push('```' + language + '\n' + code.trim() + '```');
+            return `%%CODEBLOCK${index}%%`;
+        });
+
+        // Escape special MarkdownV2 characters
         const escapeSpecial = (str: string) => str
             .replace(/_/g, '\\_')
             .replace(/\*/g, '\\*')
@@ -146,33 +155,22 @@ export class TelegramChannel extends BaseChannel {
             .replace(/\./g, '\\.')
             .replace(/!/g, '\\!');
 
-        // Process code blocks first (before escaping)
-        text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-            const language = lang || '';
-            // Don't escape inside code blocks, just wrap
-            return '```' + language + '\n' + code.trim() + '```';
-        });
+        let escaped = escapeSpecial(protectedText);
 
-        // Escape special characters in non-code text
-        const parts = text.split(/(```[\s\S]*?```)/g);
-        const escaped = parts.map(part => {
-            if (part.startsWith('```')) return part; // Keep code blocks as-is
-            return escapeSpecial(part);
-        }).join('');
-
-        // Convert markdown formatting to Telegram MarkdownV2
-        return escaped
-            .replace(/\*\*([^*]+)\*\*/g, '*$1*')  // Bold
-            .replace(/```(\w+)?\n/g, '```$1\n')    // Code block start
-            .replace(/\n```/g, '\n```')            // Code block end
-            .replace(/`([^`]+)`/g, '`$1`')         // Inline code
-            .replace(/^### (.*$)/gm, '*$1*')       // H3 -> bold italic
-            .replace(/^## (.*$)/gm, '*$1*')        // H2 -> bold italic
-            .replace(/^# (.*$)/gm, '*$1*')         // H1 -> bold italic
-            .replace(/^- (.*$)/gm, '• $1')         // Bullet points
-            .replace(/^\d+\. (.*$)/gm, '• $1')     // Numbered lists
+        // Now convert markdown formatting (on escaped text)
+        escaped = escaped
+            .replace(/\*\*([^*]+)\*\*/g, '*$1*')  // Bold: **text** → *text*
+            .replace(/%%CODEBLOCK(\d+)%%/g, (match, index) => codeBlocks[parseInt(index)]) // Restore code blocks
+            .replace(/^### (.*$)/gm, '*$1*')       // H3 → bold italic
+            .replace(/^## (.*$)/gm, '*$1*')        // H2 → bold italic
+            .replace(/^# (.*$)/gm, '*$1*')         // H1 → bold italic
+            .replace(/^• (.*$)/gm, '• $1')         // Keep bullet points
+            .replace(/^\- (.*$)/gm, '• $1')        // Convert - bullets to •
+            .replace(/^\d+\. (.*$)/gm, '• $1')     // Numbered lists to bullets
             .replace(/\n{3,}/g, '\n\n')            // Normalize line breaks
             .trim();
+
+        return escaped;
     }
 
     private stripMarkdown(text: string): string {
