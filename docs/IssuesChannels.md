@@ -283,23 +283,26 @@ eventBus.on('message.outbound', async ({ message, sessionId }) => {
   - Reset `errorCount` on successful poll
 
 ### CHAN-009: WhatsApp has no reconnection logic
-- [ ] **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No (first connection works)
-- **File**: `src/channels/whatsapp/index.ts`, lines 117-123
-- **Problem**: When WhatsApp disconnects (line 118), the handler just logs and tells the user to restart Talon. There is no automatic reconnection attempt. For a long-running agent, this means WhatsApp silently dies.
-- **Fix**: Implement reconnection with backoff:
-  ```typescript
-  this.client.on('disconnected', async (reason: string) => {
-      this.isReady = false;
-      logger.warn({ reason }, 'WhatsApp disconnected, attempting reconnect...');
-      setTimeout(() => this.client.initialize(), 10000);
-  });
-  ```
+- [x] ✅ **RESOLVED**
+- **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No (first connection works)
+- **File**: `src/channels/whatsapp/index.ts`, lines 121-147
+- **Status**: Fixed — Automatic reconnection with exponential backoff
+- **Solution**: 
+  - Track `reconnectAttempts` with max of 5 attempts
+  - Exponential backoff: 5s, 10s, 20s, 40s, 80s (max 60s)
+  - Reset attempt counter on successful reconnect
+  - Clear error message when max attempts reached
 
 ### CHAN-010: WhatsApp `handleMessage` has no rate limiting
-- [ ] **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
-- **File**: `src/channels/whatsapp/index.ts`, line 126
-- **Problem**: Every incoming message triggers `handleMessage` → `ingestMessage` → agent loop. If someone floods the WhatsApp chat, Talon will try to process every message simultaneously, overwhelming the agent and potentially hitting LLM rate limits.
-- **Fix**: Add message debouncing or queue with rate limiting.
+- [x] ✅ **RESOLVED**
+- **Severity**: 🟡 Medium | **Blocks Today?**: ✅ No
+- **File**: `src/channels/whatsapp/index.ts`, lines 178-232, 237-239
+- **Status**: Fixed — Message queue with rate limiting
+- **Solution**: 
+  - Message queue with 1 second between sends (RATE_LIMIT_MS)
+  - Queue size limit (10 messages) to prevent flooding
+  - Process queue sequentially with rate limiting
+  - CHAN-020: Message chunking at 65000 chars (under 65536 limit)
 
 ---
 
