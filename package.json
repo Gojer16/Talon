@@ -28,7 +28,8 @@
         "test:vector": "node scripts/test-vector-memory.js",
         "test:gateway": "node scripts/test-gateway-e2e.js",
         "test:all": "npm run build && npm run test:memory && npm run test:integration && npm run test:gateway",
-        "install:vector": "bash scripts/install-vector-deps.sh"
+        "install:vector": "bash scripts/install-vector-deps.sh",
+        "ws:setup": "node dist/cli/whatsapp-setup.js"
     },
     "engines": {
         "node": ">=22.0.0"

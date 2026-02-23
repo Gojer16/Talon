@@ -18,6 +18,16 @@ async function main(): Promise<void> {
             break;
         }
 
+        case 'ws-setup':
+        case 'ws:setup':
+        case 'whatsapp-setup':
+        case 'whatsapp': {
+            // Import and run WhatsApp setup
+            const { setupWhatsApp } = await import('./whatsapp-setup.js');
+            await setupWhatsApp();
+            break;
+        }
+
         case 'gateway':
         case 'start':
         case 'dashboard': {

@@ -5,6 +5,8 @@
 import { BaseChannel } from '../base.js';
 import type { OutboundMessage } from '../../utils/types.js';
 import { logger } from '../../utils/logger.js';
+import os from 'node:os';
+import path from 'node:path';
 
 // Dynamic import for whatsapp-web.js to handle optional dependency
 let Client: any;
@@ -53,8 +55,6 @@ export class WhatsAppChannel extends BaseChannel {
         super(config, eventBus, sessionManager, router);
         // CHAN-022: Store auth data in secure location outside workspace
         // Use ~/.talon/auth/whatsapp/ instead of workspace/whatsapp-auth/
-        const os = require('os');
-        const path = require('path');
         const homeDir = os.homedir();
         this.authDir = path.join(homeDir, '.talon', 'auth', 'whatsapp');
     }
