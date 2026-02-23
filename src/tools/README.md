@@ -31,13 +31,13 @@ Core modules:
 - `ShellTools`: Execute commands with timeout and destructive pattern blocking
 - `WebTools`: Search and fetch web content with multi-provider fallback
 - `BrowserTools`: Puppeteer-based browser automation
-- `ProductivityTools`: Notes, tasks, Apple integrations (macOS)
+- `ProductivityTools`: Notes, tasks, Apple integrations (macOS, bulletproofed with Zod + JSON output)
 - `MemoryTools`: Agent's own memory management (append/search)
 - `SafetySystem`: Path validation, command blocking, rate limiting
 
-State management: Stateless tool execution (pure functions), stateful browser instances (BrowserTools), platform detection for Apple tools.
+State management: Stateless tool execution (pure functions), stateful browser instances (BrowserTools), platform detection for Apple tools, permission caching with TTL for Apple apps.
 
-Data flow: Agent request → tool lookup → parameter validation → safety checks → platform detection → external call → result formatting → agent response.
+Data flow: Agent request → tool lookup → Zod schema validation → safety checks → platform detection → permission check → external call → BulletproofOutput JSON → agent response.
 
 ## 4. Folder Structure Explanation
 
@@ -105,13 +105,45 @@ Data flow: Agent request → tool lookup → parameter validation → safety che
 - Side effects: Creates/updates tasks.json in workspace
 - Critical assumptions: JSON file persists, task schema stable
 
-**apple-*.ts** (5 files, 100-200 lines each)
-- What: macOS Apple app integrations (Notes, Reminders, Calendar, Mail, Safari)
-- Why: Native integration with user's existing Apple ecosystem
-- Who calls: Agent on macOS when user asks about Apple apps
-- What calls: AppleScript via osascript command
-- Side effects: Interacts with Apple apps, creates/modifies user data
-- Critical assumptions: macOS platform, Apple apps installed, permissions granted
+**apple-shared.ts** (220+ lines)
+- What: Shared bulletproof infrastructure for all Apple tool integrations
+- Why: DRY extraction of common patterns — output contract, validation, safe execution, permission checks
+- Who calls: All apple-*.ts tool files
+- What calls: child_process (exec), fs (temp files), os (tmpdir), zod (validation)
+- Side effects: Writes/cleans temp .scpt files, caches permission check results (5-min TTL)
+- Exports: `BulletproofOutput`, `formatSuccess`, `formatError`, `safeExecAppleScript`, `checkAppPermission`, `handleAppleScriptError`, `checkPlatform`, `createBaseString`, `escapeAppleScript`, `normalizeString`, `DELIMITER`
+
+**apple-calendar.ts** (730+ lines)
+- What: macOS Calendar integration with full bulletproofing
+- Why: Native Apple Calendar management — create, list, delete events
+- Who calls: Agent on macOS when user asks about calendar events
+- What calls: apple-shared.ts utilities, date-parser.ts for flexible date input
+- Side effects: Creates/modifies calendar events, caches permissions
+- Bulletproofing: Zod schemas (`CreateEventSchema`, `ListEventsSchema`, `DeleteEventSchema`), DST gap detection, idempotency checks, operation locking, `BulletproofOutput` JSON responses
+
+**apple-reminders.ts** (240+ lines)
+- What: macOS Reminders integration with full bulletproofing
+- Why: Native Apple Reminders management — add, list, complete reminders
+- Who calls: Agent on macOS when user asks about reminders
+- What calls: apple-shared.ts utilities, safeExecAppleScript
+- Side effects: Creates/modifies reminders, caches permissions
+- Bulletproofing: Zod schemas (`AddReminderSchema`, `ListRemindersSchema`, `CompleteReminderSchema`), date validation, `BulletproofOutput` JSON responses
+
+**apple-notes.ts** (180+ lines)
+- What: macOS Notes integration with full bulletproofing
+- Why: Native Apple Notes management — create, search notes
+- Who calls: Agent on macOS when user asks about notes
+- What calls: apple-shared.ts utilities, safeExecAppleScript
+- Side effects: Creates notes, caches permissions
+- Bulletproofing: Zod schemas (`CreateNoteSchema`, `SearchNotesSchema`), `BulletproofOutput` JSON responses, safe delimiter output parsing
+
+**apple-mail.ts** (480+ lines)
+- What: macOS Mail integration with full bulletproofing
+- Why: Native Apple Mail management — list, search, read, count emails
+- Who calls: Agent on macOS when user asks about email
+- What calls: apple-shared.ts utilities, safeExecAppleScript
+- Side effects: Reads email data, caches permissions
+- Bulletproofing: Zod schemas (`ListEmailsSchema`, `GetRecentSchema`, `SearchEmailsSchema`, `GetEmailContentSchema`, `CountEmailsSchema`), `BulletproofOutput` JSON responses, index bounds validation
 
 **screenshot.ts** (100+ lines)
 - What: Cross-platform desktop screenshot capture
@@ -169,16 +201,18 @@ Data flow: Agent request → tool lookup → parameter validation → safety che
 
 **Output types:**
 - `ToolResult`: String result (success) or error message
+- `BulletproofOutput`: {success, data?, error?: {code, message, recoverable, recoverySteps?}, metadata: {timestamp, duration_ms}}
 - `BrowserResult`: {success, content?, screenshot?, error?}
 - `SearchResponse`: {query, provider, results[], tookMs}
 - `FileResult`: Content with metadata (line count, size)
 
 **Error behavior:**
 - Safety violations: Returns clear error message about blocked action
-- Permission errors: Returns path/command-specific denial message
+- Permission errors: Returns `PERMISSION_DENIED` with recoverySteps (Apple tools)
+- Validation errors: Returns `VALIDATION_ERROR` with Zod error details (Apple tools)
 - Network errors: Returns provider-specific error with fallback attempt
-- Timeout errors: Returns timeout message with duration
-- Platform errors: Returns macOS/Windows/Linux-specific guidance
+- Timeout errors: Returns `TIMEOUT` with duration (Apple tools) or timeout message
+- Platform errors: Returns `PLATFORM_NOT_SUPPORTED` with macOS guidance (Apple tools)
 
 **Edge cases:**
 - Empty search results: Returns "No results found" with query
@@ -201,7 +235,7 @@ Data flow: Agent request → tool lookup → parameter validation → safety che
 - Command safety: Regex pattern matching for destructive commands, configurable blocklists
 - Web search fallback: DeepSeek → OpenRouter → Tavily → DuckDuckGo priority chain
 - Browser automation: Puppeteer lifecycle management with auto-reconnect
-- AppleScript integration: Heredoc syntax with proper quoting for apostrophes
+- AppleScript integration: Temp file execution via `safeExecAppleScript` (avoids shell quoting issues), Zod schema validation, permission caching with 5-min TTL
 - Screenshot capture: Platform detection with command-specific arguments
 
 **Important decision trees:**
@@ -221,10 +255,11 @@ Data flow: Agent request → tool lookup → parameter validation → safety che
 
 **Validation strategy:**
 - Parameter validation: JSON schema validation before execution
+- Apple tool validation: Zod schemas with `.strict()` mode — validates types, string lengths, enum values, and rejects unknown fields
 - Path validation: Resolution and prefix checking against config
 - Command validation: Blocklist and pattern matching
 - URL validation: Protocol checking (http/https)
-- Platform validation: macOS checks for Apple tools
+- Platform validation: macOS checks for Apple tools (returns `PLATFORM_NOT_SUPPORTED` JSON)
 - Missing: Input sanitization for shell command arguments
 
 **Retry logic:**
@@ -284,14 +319,15 @@ BrowserResult: {
 - All web search providers rate limited: No fallback available
 - Browser fails to launch: Chrome not installed or permissions issue
 - File permission denied: Path outside allowed areas or OS restrictions
-- AppleScript execution fails: App not installed or permissions denied
+- AppleScript execution fails: Returns `APPLESCRIPT_ERROR` with stderr details (Apple tools)
+- AppleScript permission denied: Returns `PERMISSION_DENIED` with `recoverySteps` (Apple tools)
 - Shell command hangs: Process doesn't respect timeout
 - Memory full: Cannot write to memory files
 
 **Silent failure risks:**
 - Command blocking false negative: Dangerous command not detected
 - Path traversal not caught: Relative path escapes allowed area
-- AppleScript error swallowed: Failure not reported to user
+- ~~AppleScript error swallowed: Failure not reported to user~~ **RESOLVED**: All Apple tools return structured `BulletproofOutput` JSON with error codes
 - Browser disconnection: Page state lost without error
 - Missing: Tool execution timeout not enforced
 
@@ -299,8 +335,8 @@ BrowserResult: {
 - Concurrent file writes: Corruption of memory/notes files
 - Browser instance reuse: Multiple tool calls interfering
 - Shell command collision: Working directory conflicts
-- Apple app state: Multiple tools modifying same app data
-- Missing: Locking for shared resource access
+- Apple Calendar: Concurrent event creation prevented by operation lock
+- Other Apple apps: No lock (low concurrency risk for Notes/Reminders/Mail read operations)
 
 **Memory issues:**
 - Browser instance leak: Puppeteer not cleaned up
@@ -343,7 +379,7 @@ BrowserResult: {
 6. AppleScript testing: Run osascript commands manually
 
 **How to test locally:**
-1. Unit tests: `npm test src/tools/` (35+ tests)
+1. Unit tests: `npx vitest run tests/unit/apple-*.test.ts` (79 tests across 4 Apple tool files)
 2. Integration: Register tools, execute with test parameters
 3. Safety testing: Attempt blocked paths/commands, verify denial
 4. Browser testing: Launch browser, navigate to test page
@@ -361,7 +397,8 @@ BrowserResult: {
 
 **What files must be read before editing:**
 - `registry.ts`: Tool registration pattern and safety integration
-- The specific tool file being modified (e.g., `file.ts`, `shell.ts`)
+- `apple-shared.ts`: Shared Apple tool infrastructure (BulletproofOutput, safeExecAppleScript, Zod helpers)
+- The specific tool file being modified (e.g., `file.ts`, `shell.ts`, `apple-*.ts`)
 - `normalize.ts`: Output formatting conventions
 - Configuration schema for tool settings
 - Platform detection logic in registry
@@ -403,13 +440,16 @@ BrowserResult: {
 - Incomplete input sanitization for shell command arguments
 - No tool usage quotas or rate limiting per user
 - Browser instance management could be more robust
-- AppleScript error handling is basic
 - Missing: Tool execution history and audit logging
 - Missing: Tool performance monitoring and alerting
 
+**Resolved (v0.4.0):**
+- ~~AppleScript error handling is basic~~ → All Apple tools now use `BulletproofOutput` JSON with structured error codes, recovery steps, and Zod validation
+- ~~Standardize error handling patterns across all tools~~ → Apple tools standardized via `apple-shared.ts`
+- ~~Extract safety system to shared module~~ → `apple-shared.ts` provides shared infrastructure for all Apple tools
+
 **Refactor targets:**
-- Extract safety system to shared module (used by multiple tools)
-- Implement proper input sanitization for all user-provided arguments
+- Implement proper input sanitization for all user-provided arguments (non-Apple tools)
 - Add tool usage quotas with configurable limits
 - Improve browser instance pooling and health checks
 - Add comprehensive audit logging for all tool executions
@@ -419,6 +459,4 @@ BrowserResult: {
 - Consolidate similar tools (multiple file operations could be one tool with action parameter)
 - Reduce platform-specific code with better abstraction
 - Simplify tool registration boilerplate
-- Merge related Apple tools into categories
-- Standardize error handling patterns across all tools
 - Missing: Configuration-driven tool enablement matrix
