@@ -1,12 +1,51 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
+// ─── Bulletproof Apple Reminders Tools ─────────────────────────────
+// Zod-validated, structured JSON output, safe AppleScript execution
+
+import { z } from 'zod';
 import { logger } from '../utils/logger.js';
+import {
+    formatSuccess,
+    formatError,
+    escapeAppleScript,
+    createBaseString,
+    safeExecAppleScript,
+    checkPlatform,
+    checkAppPermission,
+    handleAppleScriptError,
+    getPermissionRecoverySteps,
+} from './apple-shared.js';
 
-const execAsync = promisify(exec);
+// ─── Zod Schemas ──────────────────────────────────────────────────
 
-function escapeAppleScript(str: string): string {
-    return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+const AddReminderSchema = z.object({
+    title: createBaseString(500, 'Reminder title is too long'),
+    list: createBaseString(100, 'List name is too long').default('Talon'),
+    dueDate: z.string().trim()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Due date must be in YYYY-MM-DD format')
+        .optional(),
+    priority: z.number().int().min(0).max(9).default(0),
+}).strict();
+
+const ListRemindersSchema = z.object({
+    list: createBaseString(100, 'List name is too long').default('Talon'),
+    completed: z.boolean().default(false),
+}).strict();
+
+const CompleteReminderSchema = z.object({
+    title: createBaseString(500, 'Reminder title is too long'),
+    list: createBaseString(100, 'List name is too long').default('Talon'),
+}).strict();
+
+// ─── Permission Check ─────────────────────────────────────────────
+
+async function checkRemindersPermission() {
+    return checkAppPermission('Reminders', `tell application "Reminders"
+    set testList to name of list 1
+    return testList
+end tell`);
 }
+
+// ─── Tools ────────────────────────────────────────────────────────
 
 export const appleRemindersTools = [
     {
@@ -22,36 +61,64 @@ export const appleRemindersTools = [
             },
             required: ['title'],
         },
-        async execute(args: Record<string, unknown>): Promise<string> {
-            if (process.platform !== 'darwin') {
-                return 'Error: Apple Reminders is only available on macOS';
+        async execute(rawArgs: Record<string, unknown>): Promise<string> {
+            const startTime = Date.now();
+
+            const platformErr = checkPlatform('Apple Reminders', startTime);
+            if (platformErr) return platformErr;
+
+            // Validate input
+            const parsed = AddReminderSchema.safeParse(rawArgs);
+            if (!parsed.success) {
+                return formatError('VALIDATION_ERROR', 'Input validation failed', false, { errors: parsed.error.format() }, startTime);
             }
 
-            const title = escapeAppleScript(args.title as string);
-            const listName = escapeAppleScript((args.list as string) || 'Talon');
-            const priority = (args.priority as number) || 0;
+            const args = parsed.data;
+
+            // Permission check
+            const permCheck = await checkRemindersPermission();
+            if (!permCheck.granted) {
+                return formatError('PERMISSION_DENIED', 'Terminal does not have permission to access Reminders', true, {}, startTime, getPermissionRecoverySteps('Reminders'));
+            }
+
+            const title = escapeAppleScript(args.title);
+            const listName = escapeAppleScript(args.list);
 
             let script = `tell application "Reminders"
     if not (exists list "${listName}") then
         make new list with properties {name:"${listName}"}
     end if
     set targetList to list "${listName}"
-    set newReminder to make new reminder at end of targetList with properties {name:"${title}", priority:${priority}}`;
+    set newReminder to make new reminder at end of targetList with properties {name:"${title}", priority:${args.priority}}`;
 
             if (args.dueDate) {
-                const dueDate = args.dueDate as string;
-                script += `\n    set due date of newReminder to date "${dueDate}"`;
+                // Parse YYYY-MM-DD to validate it's a real date
+                const [year, month, day] = args.dueDate.split('-').map(Number);
+                const testDate = new Date(year, month - 1, day);
+                if (isNaN(testDate.getTime()) || testDate.getMonth() !== month - 1) {
+                    return formatError('INVALID_DATE', `"${args.dueDate}" is not a valid date`, true, { dueDate: args.dueDate }, startTime);
+                }
+                script += `\n    set due date of newReminder to date "${month}/${day}/${year}"`;
             }
 
+            script += `\n    return name of newReminder`;
             script += '\nend tell';
 
             try {
-                await execAsync(`osascript -e '${script}'`);
-                logger.info({ title, list: listName }, 'Apple Reminder added');
-                return `Reminder added: "${args.title}" (list: ${listName})`;
+                const { stdout, stderr } = await safeExecAppleScript(script, 10000);
+
+                const output = stdout.trim();
+                logger.info({ title: args.title, list: listName, priority: args.priority }, 'Apple Reminder added');
+
+                return formatSuccess({
+                    message: `Reminder added: "${args.title}"`,
+                    title: args.title,
+                    list: listName,
+                    priority: args.priority,
+                    dueDate: args.dueDate || null,
+                }, { applescriptOutput: output }, startTime);
             } catch (error) {
-                logger.error({ error }, 'Failed to add Apple Reminder');
-                return `Error: ${(error as Error).message}`;
+                return handleAppleScriptError(error, 'Reminders', { title: args.title, list: listName }, startTime);
             }
         },
     },
@@ -65,23 +132,35 @@ export const appleRemindersTools = [
                 completed: { type: 'boolean', description: 'Show completed reminders (default: false)' },
             },
         },
-        async execute(args: Record<string, unknown>): Promise<string> {
-            if (process.platform !== 'darwin') {
-                return 'Error: Apple Reminders is only available on macOS';
+        async execute(rawArgs: Record<string, unknown>): Promise<string> {
+            const startTime = Date.now();
+
+            const platformErr = checkPlatform('Apple Reminders', startTime);
+            if (platformErr) return platformErr;
+
+            const parsed = ListRemindersSchema.safeParse(rawArgs);
+            if (!parsed.success) {
+                return formatError('VALIDATION_ERROR', 'Input validation failed', false, { errors: parsed.error.format() }, startTime);
             }
 
-            const listName = escapeAppleScript((args.list as string) || 'Talon');
-            const showCompleted = args.completed || false;
+            const args = parsed.data;
+
+            const permCheck = await checkRemindersPermission();
+            if (!permCheck.granted) {
+                return formatError('PERMISSION_DENIED', 'Terminal does not have permission to access Reminders', true, {}, startTime, getPermissionRecoverySteps('Reminders'));
+            }
+
+            const listName = escapeAppleScript(args.list);
 
             const script = `tell application "Reminders"
     if not (exists list "${listName}") then
-        return "List not found: ${listName}"
+        return "LIST_NOT_FOUND"
     end if
     set targetList to list "${listName}"
     set reminderList to {}
     repeat with aReminder in reminders of targetList
         set isCompleted to completed of aReminder
-        if ${showCompleted} or not isCompleted then
+        if ${args.completed} or not isCompleted then
             set reminderName to name of aReminder
             set reminderStatus to ""
             if isCompleted then
@@ -93,18 +172,45 @@ export const appleRemindersTools = [
         end if
     end repeat
     if (count of reminderList) = 0 then
-        return "No reminders found"
+        return "NO_REMINDERS"
     else
         return reminderList as text
     end if
 end tell`;
 
             try {
-                const { stdout } = await execAsync(`osascript -e '${script}'`);
-                return stdout.trim() || `No reminders in list "${listName}"`;
+                const { stdout } = await safeExecAppleScript(script, 10000);
+                const output = stdout.trim();
+
+                if (output === 'LIST_NOT_FOUND') {
+                    return formatError('LIST_NOT_FOUND', `List "${args.list}" does not exist`, true, { list: listName }, startTime);
+                }
+
+                if (output === 'NO_REMINDERS') {
+                    return formatSuccess({
+                        reminders: [],
+                        count: 0,
+                        message: `No reminders found in "${args.list}"`,
+                        list: listName,
+                    }, {}, startTime);
+                }
+
+                // Parse the comma-separated reminder list
+                const reminders = output.split(', ').map(item => {
+                    const isComplete = item.startsWith('[✓]');
+                    const name = item.replace(/^\[.\]\s*/, '').trim();
+                    return { name, completed: isComplete };
+                });
+
+                return formatSuccess({
+                    reminders,
+                    count: reminders.length,
+                    message: `Found ${reminders.length} reminder(s) in "${args.list}"`,
+                    list: listName,
+                    showingCompleted: args.completed,
+                }, { applescriptOutput: output }, startTime);
             } catch (error) {
-                logger.error({ error }, 'Failed to list Apple Reminders');
-                return `Error: ${(error as Error).message}`;
+                return handleAppleScriptError(error, 'Reminders', { list: listName }, startTime);
             }
         },
     },
@@ -119,17 +225,30 @@ end tell`;
             },
             required: ['title'],
         },
-        async execute(args: Record<string, unknown>): Promise<string> {
-            if (process.platform !== 'darwin') {
-                return 'Error: Apple Reminders is only available on macOS';
+        async execute(rawArgs: Record<string, unknown>): Promise<string> {
+            const startTime = Date.now();
+
+            const platformErr = checkPlatform('Apple Reminders', startTime);
+            if (platformErr) return platformErr;
+
+            const parsed = CompleteReminderSchema.safeParse(rawArgs);
+            if (!parsed.success) {
+                return formatError('VALIDATION_ERROR', 'Input validation failed', false, { errors: parsed.error.format() }, startTime);
             }
 
-            const title = escapeAppleScript(args.title as string);
-            const listName = escapeAppleScript((args.list as string) || 'Talon');
+            const args = parsed.data;
+
+            const permCheck = await checkRemindersPermission();
+            if (!permCheck.granted) {
+                return formatError('PERMISSION_DENIED', 'Terminal does not have permission to access Reminders', true, {}, startTime, getPermissionRecoverySteps('Reminders'));
+            }
+
+            const title = escapeAppleScript(args.title);
+            const listName = escapeAppleScript(args.list);
 
             const script = `tell application "Reminders"
     if not (exists list "${listName}") then
-        return "List not found: ${listName}"
+        return "LIST_NOT_FOUND"
     end if
     set targetList to list "${listName}"
     set found to false
@@ -141,23 +260,36 @@ end tell`;
         end if
     end repeat
     if found then
-        return "Completed"
+        return "COMPLETED"
     else
-        return "Not found"
+        return "NOT_FOUND"
     end if
 end tell`;
 
             try {
-                const { stdout } = await execAsync(`osascript -e '${script}'`);
-                if (stdout.trim() === 'Completed') {
-                    logger.info({ title, list: listName }, 'Apple Reminder completed');
-                    return `Reminder completed: "${args.title}"`;
-                } else {
-                    return `Reminder not found: "${args.title}" in list "${listName}"`;
+                const { stdout } = await safeExecAppleScript(script, 10000);
+                const output = stdout.trim();
+
+                if (output === 'LIST_NOT_FOUND') {
+                    return formatError('LIST_NOT_FOUND', `List "${args.list}" does not exist`, true, { list: listName, title: args.title }, startTime);
                 }
+
+                if (output === 'NOT_FOUND') {
+                    return formatError('REMINDER_NOT_FOUND', `Reminder "${args.title}" not found in list "${args.list}"`, true, {
+                        list: listName,
+                        title: args.title,
+                        suggestion: 'Check the exact reminder title or list name',
+                    }, startTime);
+                }
+
+                logger.info({ title: args.title, list: listName }, 'Apple Reminder completed');
+                return formatSuccess({
+                    message: `Reminder completed: "${args.title}"`,
+                    title: args.title,
+                    list: listName,
+                }, { applescriptOutput: output }, startTime);
             } catch (error) {
-                logger.error({ error }, 'Failed to complete Apple Reminder');
-                return `Error: ${(error as Error).message}`;
+                return handleAppleScriptError(error, 'Reminders', { title: args.title, list: listName }, startTime);
             }
         },
     },
