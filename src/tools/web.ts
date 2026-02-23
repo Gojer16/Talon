@@ -9,12 +9,35 @@
 // - DuckDuckGo: free but unreliable
 
 import { JSDOM } from 'jsdom';
+import { z } from 'zod';
 import type { TalonConfig } from '../config/schema.js';
 import type { ToolDefinition } from './registry.js';
 import { logger } from '../utils/logger.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_CHARS = 50_000;
+
+// ─── Input Validation Schemas ─────────────────────────────────────
+
+const WebSearchSchema = z.object({
+    query: z.string()
+        .trim()
+        .min(1, 'Query cannot be empty')
+        .max(1000, 'Query too long (max 1000 chars)'),
+});
+
+const WebFetchSchema = z.object({
+    url: z.string()
+        .trim()
+        .min(1, 'URL cannot be empty')
+        .max(2048, 'URL too long (max 2048 chars)')
+        .url('Invalid URL format')
+        .refine(
+            (url) => url.startsWith('http://') || url.startsWith('https://'),
+            'URL must start with http:// or https://'
+        ),
+    maxChars: z.number().int().min(100).max(500000).optional().default(DEFAULT_MAX_CHARS),
+}).passthrough();
 
 interface SearchResult {
     title: string;
@@ -405,14 +428,22 @@ export function registerWebTools(config: TalonConfig): ToolDefinition[] {
                 required: ['query'],
             },
             execute: async (args) => {
-                const query = args.query as string;
+                // Validate inputs
+                let query: string;
+                try {
+                    const parsed = WebSearchSchema.parse(args);
+                    query = parsed.query;
+                } catch (error: any) {
+                    return `Error: ${error.errors?.[0]?.message || 'Invalid parameters'}`;
+                }
+
                 logger.info({ query }, 'web_search');
 
                 try {
                     const response = await runWebSearch(query, config);
-                    
+
                     let output = `**Search Results (${response.provider})**\n\n`;
-                    
+
                     if (response.results.length === 0) {
                         return 'No results found.';
                     }
@@ -449,8 +480,17 @@ export function registerWebTools(config: TalonConfig): ToolDefinition[] {
                 required: ['url'],
             },
             execute: async (args) => {
-                const url = args.url as string;
-                const maxChars = (args.maxChars as number) ?? config.tools.web?.fetch?.maxChars ?? DEFAULT_MAX_CHARS;
+                // Validate inputs
+                let url: string;
+                let maxChars: number;
+
+                try {
+                    const parsed = WebFetchSchema.parse(args);
+                    url = parsed.url as string;
+                    maxChars = parsed.maxChars as number;
+                } catch (error: any) {
+                    return `Error: ${error.errors?.[0]?.message || 'Invalid parameters'}`;
+                }
 
                 logger.info({ url, maxChars }, 'web_fetch');
 
