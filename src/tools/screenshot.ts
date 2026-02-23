@@ -1,15 +1,70 @@
 // ─── Desktop Screenshot Tool ──────────────────────────────────────
 // Capture desktop screenshots (macOS/Linux/Windows)
+// Includes Zod validation for output paths
 
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs/promises';
+import { z } from 'zod';
 import type { ToolDefinition } from './registry.js';
 import { logger } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
+
+// ─── Input Validation Schema ──────────────────────────────────────
+
+const ScreenshotSchema = z.object({
+    outputPath: z.string()
+        .trim()
+        .max(500, 'Output path too long')
+        .refine(
+            (p) => !p || p.endsWith('.png'),
+            'Output path must end with .png'
+        )
+        .optional(),
+    returnBase64: z.boolean().optional().default(false),
+});
+
+/**
+ * Validate that a path is safe (no path traversal outside allowed dirs)
+ */
+function validateOutputPath(outputPath: string | undefined): { valid: boolean; path: string; error?: string } {
+    const timestamp = Date.now();
+    const defaultPath = path.join(os.tmpdir(), `talon-screenshot-${timestamp}.png`);
+    
+    if (!outputPath) {
+        return { valid: true, path: defaultPath };
+    }
+    
+    // Check for path traversal
+    if (outputPath.includes('..')) {
+        return { valid: false, path: defaultPath, error: 'Path traversal not allowed (..)' };
+    }
+    
+    // Resolve to absolute path
+    const resolved = path.resolve(outputPath);
+    
+    // Ensure it's within safe directories (temp or home)
+    const tmpDir = path.resolve(os.tmpdir());
+    const homeDir = path.resolve(os.homedir());
+    
+    if (!resolved.startsWith(tmpDir) && !resolved.startsWith(homeDir)) {
+        return { 
+            valid: false, 
+            path: defaultPath, 
+            error: 'Output path must be in temp directory or home directory' 
+        };
+    }
+    
+    // Ensure it ends with .png
+    if (!resolved.toLowerCase().endsWith('.png')) {
+        return { valid: false, path: defaultPath, error: 'Output path must end with .png' };
+    }
+    
+    return { valid: true, path: resolved };
+}
 
 /**
  * Capture a screenshot of the desktop
@@ -91,11 +146,26 @@ export const desktopScreenshotTools: ToolDefinition[] = [
             required: [],
         },
         execute: async (args) => {
+            // Validate inputs
+            let returnBase64: boolean;
+            
+            try {
+                const parsed = ScreenshotSchema.parse(args);
+                returnBase64 = parsed.returnBase64;
+            } catch (error: any) {
+                return `Error: ${error.errors?.[0]?.message || 'Invalid parameters'}`;
+            }
+            
+            // Validate output path separately (custom validation)
             const outputPath = args.outputPath as string | undefined;
-            const returnBase64 = args.returnBase64 as boolean | undefined;
+            const pathValidation = validateOutputPath(outputPath);
+            
+            if (!pathValidation.valid) {
+                return `Error: Invalid output path: ${pathValidation.error}`;
+            }
 
             try {
-                const imagePath = await captureScreenshot(outputPath);
+                const imagePath = await captureScreenshot(pathValidation.path);
 
                 if (returnBase64) {
                     const base64 = await screenshotToBase64(imagePath);
