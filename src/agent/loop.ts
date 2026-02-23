@@ -50,6 +50,10 @@ export class AgentLoop {
     private fallbackRouter: FallbackRouter;
     private sessionId: string | null = null;
     private subagentRegistry?: any; // Will be set via setSubagentRegistry
+    
+    // Rate limiting for tool calls
+    private lastToolCallTime = 0;
+    private minToolCallInterval = 500; // Minimum 500ms between tool calls
 
     constructor(
         private modelRouter: ModelRouter,
@@ -354,6 +358,16 @@ export class AgentLoop {
                         iteration,
                     };
 
+                    // Rate limiting: enforce minimum delay between tool calls
+                    const now = Date.now();
+                    const timeSinceLastCall = now - this.lastToolCallTime;
+                    if (timeSinceLastCall < this.minToolCallInterval) {
+                        const delay = this.minToolCallInterval - timeSinceLastCall;
+                        logger.debug({ tool: tc.name, delay }, 'Rate limiting tool execution');
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                    this.lastToolCallTime = Date.now();
+
                     const toolHandler = this.tools.get(tc.name);
                     let output: string;
                     let success: boolean;
@@ -379,7 +393,29 @@ export class AgentLoop {
                                 },
                             });
                         } catch (err) {
-                            output = `Error: ${err instanceof Error ? err.message : String(err)}`;
+                            // Preserve full error context for debugging
+                            const errorDetails = err instanceof Error 
+                                ? {
+                                    message: err.message,
+                                    stack: err.stack,
+                                    name: err.name,
+                                }
+                                : { error: err };
+                            
+                            logger.error({
+                                tool: tc.name,
+                                args: tc.args,
+                                error: errorDetails,
+                            }, 'Tool execution failed');
+                            
+                            output = JSON.stringify({
+                                success: false,
+                                error: {
+                                    code: 'EXECUTION_ERROR',
+                                    message: err instanceof Error ? err.message : String(err),
+                                    details: errorDetails,
+                                },
+                            }, null, 2);
                             success = false;
                         }
                     } else {
@@ -423,20 +459,18 @@ export class AgentLoop {
             this.state = 'evaluating';
 
             // If the LLM returned empty content but we had tool results,
-            // synthesize a response so the user always sees something
+            // DO NOT synthesize from tool results - this creates ugly output.
+            // Instead, let the renderer handle it with a clean message.
             let finalContent = response.content;
             if (!finalContent && pendingToolResults.length > 0) {
                 logger.warn({ iteration, toolCount: pendingToolResults.length },
-                    'LLM returned empty content after tool calls — synthesizing response from tool results');
-
-                finalContent = pendingToolResults
-                    .map(tr => {
-                        if (tr.success) {
-                            return `**${tr.name}:**\n${tr.output}`;
-                        }
-                        return `**${tr.name}:** ⚠️ ${tr.output}`;
-                    })
-                    .join('\n\n');
+                    'LLM returned empty content after tool calls — NOT synthesizing (clean UX)');
+                
+                // Clear pending results without showing them
+                pendingToolResults = [];
+                
+                // Return empty - renderer will show helpful message
+                finalContent = '';
             }
 
             pendingToolResults = []; // Clear after use
