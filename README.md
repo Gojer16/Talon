@@ -4,8 +4,9 @@
 
 Inspired by [OpenClaw](https://openclaw.ai/) — rebuilt from scratch as a privacy-first, single-user AI assistant with proactive intelligence.
 
-**Version:** 0.3.3  
+**Version:** 0.4.0
 **Status:** Production-ready with Shadow Loop, subagents, browser control, productivity tools & full system access
+**Channels:** ✅ CLI, ✅ Telegram, ✅ WhatsApp (all production-ready)
 
 ---
 
@@ -43,9 +44,20 @@ Talk to Talon wherever you are:
 | Channel | Status | Features |
 |---------|--------|----------|
 | **💻 CLI** | ✅ Enhanced | Interactive terminal with real-time streaming, tool visualization |
-| **📱 WhatsApp** | ✅ Ready | Full WhatsApp Web integration, QR auth, groups |
-| **✈️ Telegram** | ✅ Ready | Bot integration, polling, user/group authorization |
+| **📱 WhatsApp** | ✅ Production Ready | Full WhatsApp Web integration, QR auth, groups, auto-reconnect, rate limiting |
+| **✈️ Telegram** | ✅ Production Ready | Bot integration, polling, user/group authorization, mention detection, message chunking |
 | **🌐 Web UI** | 🚧 Planned | Browser dashboard (coming in v0.4.0) |
+
+**Recent Channel Fixes (2026-02-23):**
+- ✅ Response delivery to all channels (CHAN-003)
+- ✅ Telegram message chunking for 4096 char limit (CHAN-002)
+- ✅ WhatsApp non-blocking initialization (CHAN-005)
+- ✅ Telegram group mention detection (CHAN-006)
+- ✅ WhatsApp auto-reconnection (CHAN-009)
+- ✅ Rate limiting for WhatsApp (CHAN-010)
+- ✅ Exponential backoff for Telegram polling (CHAN-008)
+
+See [docs/IssuesChannels.md](docs/IssuesChannels.md) for complete issue tracking.
 
 ### 🎨 Enhanced CLI
 
@@ -460,6 +472,61 @@ TALON_TOKEN=your-auth-token
 ```
 
 **Note:** Use `${ENV_VAR}` syntax for secrets. They'll be replaced at runtime.
+
+---
+
+## 📱 Channel Setup Guide
+
+### Telegram Setup (5 minutes)
+
+1. **Create a bot**: Message [@BotFather](https://t.me/BotFather) on Telegram
+   - Send `/newbot` and follow prompts
+   - Copy the bot token (e.g., `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
+
+2. **Find your user ID**: Message [@userinfobot](https://t.me/userinfobot)
+   - It will reply with your numeric ID (e.g., `123456789`)
+
+3. **Add to `.env`**:
+   ```bash
+   TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+   ```
+
+4. **Update `~/.talon/config.json`**:
+   ```json
+   "telegram": {
+     "enabled": true,
+     "botToken": "${TELEGRAM_BOT_TOKEN}",
+     "allowedUsers": ["123456789"]
+   }
+   ```
+
+5. **Restart Talon**: `npm start`
+
+### WhatsApp Setup (2 minutes)
+
+1. **Install dependencies**:
+   ```bash
+   npm install whatsapp-web.js qrcode-terminal
+   ```
+
+2. **Find your phone number**: Include country code, no `+` (e.g., `584128449024`)
+
+3. **Add to `.env`**:
+   ```bash
+   WHATSAPP_PHONE_NUMBER=584128449024
+   ```
+
+4. **Update `~/.talon/config.json`**:
+   ```json
+   "whatsapp": {
+     "enabled": true,
+     "allowedUsers": ["${WHATSAPP_PHONE_NUMBER}"]
+   }
+   ```
+
+5. **Restart Talon**: `npm start`
+   - Scan the QR code displayed in terminal with your WhatsApp phone app
+   - Session persists across restarts
 
 ---
 
