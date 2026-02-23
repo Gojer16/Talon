@@ -80,6 +80,24 @@ async function boot(): Promise<void> {
     // Register tools
     registerAllTools(agentLoop, config);
 
+    // Register subagents
+    const { SubagentRegistry, ResearchSubagent, WriterSubagent, PlannerSubagent, CriticSubagent, SummarizerSubagent } = await import('../subagents/index.js');
+    const { createSubagentTool } = await import('../tools/subagent-tool.js');
+
+    const subagentRegistry = new SubagentRegistry();
+    const subagentModel = config.agent.subagentModel || 'gpt-4o-mini';
+
+    subagentRegistry.register('research', new ResearchSubagent(subagentModel, modelRouter));
+    subagentRegistry.register('writer', new WriterSubagent(subagentModel, modelRouter));
+    subagentRegistry.register('planner', new PlannerSubagent(subagentModel, modelRouter));
+    subagentRegistry.register('critic', new CriticSubagent(subagentModel, modelRouter));
+    subagentRegistry.register('summarizer', new SummarizerSubagent(subagentModel, modelRouter));
+
+    agentLoop.registerTool(createSubagentTool(subagentRegistry));
+    agentLoop.setSubagentRegistry(subagentRegistry);
+
+    logger.info({ model: subagentModel }, 'Subagents initialized');
+
     // 4. Create server (with agent loop reference)
     const server = new TalonServer(config, eventBus, sessionManager, router, agentLoop);
 
@@ -247,10 +265,6 @@ async function boot(): Promise<void> {
         // Only start if token is present (safety check, though class checks it too)
         if (config.channels.telegram.botToken) {
             const telegram = new TelegramChannel(config, eventBus, sessionManager, router);
-            // Don't await start() here because it starts polling loop!
-            // Wait, start() for Telegram starts polling loop which is async but returns void?
-            // My implementation of start() calls poll() which is async but doesn't await it.
-            // So awaiting start() is fine, it just kicks off the loop.
             await telegram.start();
             channels.push(telegram);
             logger.info('Telegram channel started');
@@ -261,10 +275,36 @@ async function boot(): Promise<void> {
 
     if (config.channels.whatsapp?.enabled) {
         const whatsapp = new WhatsAppChannel(config, eventBus, sessionManager, router);
-        await whatsapp.start();
+        // Don't await WhatsApp initialization - it blocks boot sequence waiting for QR scan
+        // Start in background so other channels and gateway are available immediately
+        whatsapp.start().catch(err => logger.error({ err }, 'WhatsApp start failed'));
         channels.push(whatsapp);
-        logger.info('WhatsApp channel starting...');
+        logger.info('WhatsApp channel starting in background...');
     }
+
+    // 7b. Wire outbound messages to channels
+    // This is the critical fix for CHAN-003: route message.outbound events back to the correct channel
+    eventBus.on('message.outbound', async ({ message, sessionId }) => {
+        const session = sessionManager.getSession(sessionId);
+        if (!session) {
+            logger.warn({ sessionId }, 'Session not found for outbound message');
+            return;
+        }
+
+        // Route to the channel that originated this session
+        for (const channel of channels) {
+            if (channel.name === session.channel) {
+                try {
+                    await channel.send(sessionId, message);
+                } catch (err) {
+                    logger.error({ err, channel: channel.name, sessionId }, 'Failed to send outbound message');
+                }
+                break;
+            }
+        }
+    });
+
+    logger.info({ channelCount: channels.length }, 'All channels started with outbound routing');
 
     // 8. Graceful shutdown
     const shutdown = async (signal: string) => {
