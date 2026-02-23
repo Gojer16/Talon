@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { z } from 'zod';
 import type { TalonConfig } from '../config/schema.js';
 import type { ToolDefinition } from './registry.js';
 import { logger } from '../utils/logger.js';
@@ -90,8 +91,20 @@ export function registerMemoryTools(config: TalonConfig): ToolDefinition[] {
                 required: ['text'],
             },
             execute: async (args) => {
-                const text = args.text as string;
-                const category = (args.category as string) || 'Note';
+                // Validate inputs
+                let text: string;
+                let category: string;
+                try {
+                    const parsed = z.object({
+                        text: z.string().trim().min(1, 'Text cannot be empty'),
+                        category: z.string().trim().max(50, 'Category too long').optional().default('Note'),
+                    }).parse(args);
+                    text = parsed.text;
+                    category = parsed.category;
+                } catch (error: any) {
+                    return `Error: ${error.errors?.[0]?.message || 'Invalid parameters'}`;
+                }
+
                 const memoryPath = getWorkspacePath(config, 'MEMORY.md');
 
                 if (!fs.existsSync(memoryPath)) {
@@ -122,13 +135,32 @@ export function registerMemoryTools(config: TalonConfig): ToolDefinition[] {
                 },
             },
             execute: async (args) => {
-                const relPath = args.path as string | undefined;
+                // Validate input if provided
+                let relPath: string | undefined;
+                try {
+                    if (args.path !== undefined) {
+                        const parsed = z.object({
+                            path: z.string().trim().min(1, 'Path cannot be empty'),
+                        }).parse(args);
+                        relPath = parsed.path;
+                    }
+                } catch (error: any) {
+                    return `Error: ${error.errors?.[0]?.message || 'Invalid path parameter'}`;
+                }
+
                 const memoryPath = relPath
                     ? path.join(config.workspace.root.replace(/^~/, os.homedir()), relPath)
                     : getWorkspacePath(config, 'MEMORY.md');
 
+                // Security: Ensure path is within workspace
+                const resolvedPath = path.resolve(memoryPath);
+                const workspaceRoot = path.resolve(config.workspace.root.replace(/^~/, os.homedir()));
+                if (!resolvedPath.startsWith(workspaceRoot)) {
+                    return 'Error: Path must be within the workspace directory';
+                }
+
                 if (!fs.existsSync(memoryPath)) {
-                    return 'Memory file is empty or does not exist.';
+                    return 'Memory file does not exist.';
                 }
                 const content = fs.readFileSync(memoryPath, 'utf-8');
                 return content;
@@ -154,8 +186,19 @@ export function registerMemoryTools(config: TalonConfig): ToolDefinition[] {
                 required: ['query'],
             },
             execute: async (args) => {
-                const query = args.query as string;
-                const maxResults = (args.maxResults as number) || 5;
+                // Validate inputs
+                let query: string;
+                let maxResults: number;
+                try {
+                    const parsed = z.object({
+                        query: z.string().trim().min(1, 'Query cannot be empty'),
+                        maxResults: z.number().int().min(1).max(50).optional().default(5),
+                    }).parse(args);
+                    query = parsed.query;
+                    maxResults = parsed.maxResults;
+                } catch (error: any) {
+                    return `Error: ${error.errors?.[0]?.message || 'Invalid parameters'}`;
+                }
 
                 logger.info({ query, maxResults }, 'memory_search');
 
@@ -184,18 +227,65 @@ export function registerMemoryTools(config: TalonConfig): ToolDefinition[] {
                 required: ['content'],
             },
             execute: async (args) => {
-                const content = args.content as string;
-                const soulPath = getWorkspacePath(config, 'SOUL.md');
+                const startTime = Date.now();
+                const MAX_CONTENT_SIZE = 10 * 1024; // 10KB limit
 
-                if (fs.existsSync(soulPath)) {
-                    const backupPath = `${soulPath}.bak`;
-                    fs.copyFileSync(soulPath, backupPath);
+                // Validate input
+                let content: string;
+                try {
+                    const parsed = z.object({
+                        content: z.string()
+                            .trim()
+                            .min(1, 'Content cannot be empty')
+                            .max(MAX_CONTENT_SIZE, `Content exceeds maximum size of ${MAX_CONTENT_SIZE} bytes (10KB)`),
+                    }).parse(args);
+                    content = parsed.content;
+                } catch (error: any) {
+                    return `Error: ${error.errors?.[0]?.message || 'Invalid content parameter'}`;
                 }
 
-                fs.writeFileSync(soulPath, content, 'utf-8');
-                logger.warn('SOUL.md updated by agent');
+                const soulPath = getWorkspacePath(config, 'SOUL.md');
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
-                return 'SOUL.md updated successfully. I will read this new identity on the next turn.';
+                // Create backup if file exists
+                let oldContent = '';
+                if (fs.existsSync(soulPath)) {
+                    try {
+                        oldContent = fs.readFileSync(soulPath, 'utf-8');
+                        const backupPath = `${soulPath}.${timestamp}.bak`;
+                        fs.copyFileSync(soulPath, backupPath);
+                        logger.info({ backupPath, oldSize: oldContent.length }, 'SOUL.md backup created');
+                    } catch (backupError: any) {
+                        logger.error({ error: backupError }, 'Failed to create SOUL.md backup');
+                        return `Error: Failed to create backup before update: ${backupError.message}`;
+                    }
+                }
+
+                try {
+                    // Write new content
+                    fs.writeFileSync(soulPath, content, 'utf-8');
+                    logger.warn({ 
+                        newSize: content.length, 
+                        oldSize: oldContent.length,
+                        changeBytes: content.length - oldContent.length 
+                    }, 'SOUL.md updated by agent');
+
+                    return `SOUL.md updated successfully (${content.length} bytes). I will read this new identity on the next turn.\nBackup saved to: SOUL.md.${timestamp}.bak`;
+                } catch (writeError: any) {
+                    // Attempt to restore from backup if write failed
+                    if (oldContent && fs.existsSync(soulPath)) {
+                        try {
+                            fs.writeFileSync(soulPath, oldContent, 'utf-8');
+                            logger.error('SOUL.md write failed, restored from backup');
+                            return `Error: Failed to write SOUL.md. Original content restored from backup: ${writeError.message}`;
+                        } catch (restoreError: any) {
+                            logger.error({ error: restoreError }, 'CRITICAL: SOUL.md corrupted during failed update');
+                            return `CRITICAL ERROR: SOUL.md update failed and backup restoration also failed. Manual intervention required.`;
+                        }
+                    }
+                    logger.error({ error: writeError }, 'SOUL.md update failed');
+                    return `Error: Failed to write SOUL.md: ${writeError.message}`;
+                }
             },
         },
 
@@ -214,9 +304,18 @@ export function registerMemoryTools(config: TalonConfig): ToolDefinition[] {
                 required: ['facts'],
             },
             execute: async (args) => {
-                const factsStr = args.facts as string;
-                let facts: Record<string, unknown>;
+                // Validate input
+                let factsStr: string;
+                try {
+                    const parsed = z.object({
+                        facts: z.string().trim().min(1, 'Facts cannot be empty'),
+                    }).parse(args);
+                    factsStr = parsed.facts;
+                } catch (error: any) {
+                    return `Error: ${error.errors?.[0]?.message || 'Invalid facts parameter'}`;
+                }
 
+                let facts: Record<string, unknown>;
                 try {
                     facts = JSON.parse(factsStr);
                 } catch {
