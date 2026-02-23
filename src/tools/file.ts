@@ -253,7 +253,7 @@ export function registerFileTools(config: TalonConfig): ToolDefinition[] {
             },
             execute: async (args) => {
                 const searchPath = path.resolve(expandPath(args.path as string));
-                const query = args.query as string;
+                let query = args.query as string;
                 const caseSensitive = args.caseSensitive as boolean | undefined;
 
                 if (!isPathAllowed(searchPath, config)) {
@@ -264,7 +264,17 @@ export function registerFileTools(config: TalonConfig): ToolDefinition[] {
                     return `Error: Path not found: "${searchPath}"`;
                 }
 
-                const regex = new RegExp(query, caseSensitive ? '' : 'i');
+                // Escape regex special characters to prevent invalid regex errors
+                // This makes the search a literal string search, not a regex search
+                const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                
+                let regex: RegExp;
+                try {
+                    regex = new RegExp(escapedQuery, caseSensitive ? '' : 'i');
+                } catch (error: any) {
+                    return `Error: Invalid search query. Please check your search terms: ${error.message}`;
+                }
+
                 const filePattern = args.filePattern as string | undefined;
                 const patternRegex = filePattern
                     ? new RegExp(filePattern.replace(/\*/g, '.*').replace(/\?/g, '.'), 'i')
