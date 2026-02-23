@@ -43,6 +43,11 @@ export class WhatsAppChannel extends BaseChannel {
     private isReady = false;
     private qrCode: string | null = null;
     private authDir: string;
+    private reconnectAttempts = 0;
+    private maxReconnectAttempts = 5;
+    private messageQueue: Array<{ chatId: string; text: string }> = [];
+    private isProcessingQueue = false;
+    private readonly RATE_LIMIT_MS = 1000; // 1 second between messages
 
     constructor(config: any, eventBus: any, sessionManager: any, router: any) {
         super(config, eventBus, sessionManager, router);
@@ -114,12 +119,32 @@ export class WhatsAppChannel extends BaseChannel {
             console.log('   Delete the auth folder and try again:', this.authDir);
         });
 
-        // Disconnected
-        this.client.on('disconnected', (reason: string) => {
+        // Disconnected - CHAN-009: Add reconnection logic
+        this.client.on('disconnected', async (reason: string) => {
             this.isReady = false;
-            logger.warn({ reason }, 'WhatsApp disconnected');
+            this.reconnectAttempts++;
+            logger.warn({ reason, attempt: this.reconnectAttempts }, 'WhatsApp disconnected, attempting reconnect');
             console.log('\n🟡 WhatsApp disconnected:', reason);
-            console.log('   Restart Talon to reconnect\n');
+            
+            if (this.reconnectAttempts <= this.maxReconnectAttempts) {
+                const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
+                logger.info({ delay, attempt: this.reconnectAttempts }, 'Scheduling reconnection');
+                console.log(`   Attempting reconnect in ${delay/1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})\n`);
+                
+                setTimeout(async () => {
+                    try {
+                        logger.info('Attempting WhatsApp reconnection...');
+                        await this.client.initialize();
+                        this.reconnectAttempts = 0; // Reset on successful reconnect
+                        logger.info('WhatsApp reconnected successfully');
+                    } catch (err) {
+                        logger.error({ err }, 'WhatsApp reconnection failed');
+                    }
+                }, delay);
+            } else {
+                logger.error({ attempts: this.reconnectAttempts }, 'WhatsApp max reconnection attempts reached');
+                console.log('   ❌ Max reconnection attempts reached. Please restart Talon.\n');
+            }
         });
 
         // Message received
@@ -154,30 +179,73 @@ export class WhatsAppChannel extends BaseChannel {
             return;
         }
 
-        // The senderId should be the WhatsApp chat ID (e.g., "1234567890@c.us")
         const chatId = session.senderId;
         if (!chatId) {
             logger.error({ sessionId }, 'No chat ID found for session');
             return;
         }
 
-        try {
-            const text = this.stripMarkdown(message.text);
-            await this.client.sendMessage(chatId, text);
-            logger.info({ chatId, textLength: text.length }, 'WhatsApp message sent');
-        } catch (err) {
-            logger.error({ err, chatId }, 'Failed to send WhatsApp message');
+        const text = this.stripMarkdown(message.text);
+        
+        // CHAN-020: Split messages into chunks for WhatsApp (65536 char limit)
+        const MAX_WHATSAPP_LENGTH = 65000; // Safe limit under 65536
+        const chunks: string[] = [];
+        for (let i = 0; i < text.length; i += MAX_WHATSAPP_LENGTH) {
+            chunks.push(text.slice(i, i + MAX_WHATSAPP_LENGTH));
         }
+
+        // CHAN-010: Add rate limiting via message queue
+        for (const chunk of chunks) {
+            this.messageQueue.push({ chatId, text: chunk });
+        }
+        
+        // Process queue if not already processing
+        if (!this.isProcessingQueue) {
+            this.processMessageQueue();
+        }
+    }
+
+    private async processMessageQueue(): Promise<void> {
+        if (this.isProcessingQueue || this.messageQueue.length === 0) {
+            return;
+        }
+
+        this.isProcessingQueue = true;
+
+        while (this.messageQueue.length > 0) {
+            const { chatId, text } = this.messageQueue.shift()!;
+            
+            try {
+                await this.client.sendMessage(chatId, text);
+                logger.debug({ chatId, textLength: text.length }, 'WhatsApp message sent');
+                
+                // Rate limit: wait between messages
+                if (this.messageQueue.length > 0) {
+                    await new Promise(resolve => setTimeout(resolve, this.RATE_LIMIT_MS));
+                }
+            } catch (err) {
+                logger.error({ err, chatId }, 'Failed to send WhatsApp message');
+                // Don't retry failed messages, just log the error
+            }
+        }
+
+        this.isProcessingQueue = false;
     }
 
     private async handleMessage(msg: any): Promise<void> {
         try {
+            // CHAN-010: Rate limiting - ignore messages if queue is too large
+            if (this.messageQueue.length > 10) {
+                logger.warn({ queueLength: this.messageQueue.length }, 'Rate limiting: ignoring message, queue full');
+                return;
+            }
+
             // Extract message info
             const from = msg.from; // e.g., "1234567890@c.us" or "1234567890@g.us" for groups
             const to = msg.to;
             const body = msg.body || '';
             const isGroup = from.endsWith('@g.us');
-            
+
             // Get sender info
             const contact = await msg.getContact();
             const senderName = contact.pushname || contact.name || 'Unknown';
@@ -216,7 +284,7 @@ export class WhatsAppChannel extends BaseChannel {
                     const botNumber = this.client.info?.wid?.user;
                     const isMentioned = body.includes(`@${botNumber}`) || body.includes('@Talon');
                     const isCommand = body.startsWith('/');
-                    
+
                     if (!isMentioned && !isCommand) {
                         logger.debug('Ignoring group message without mention');
                         return;

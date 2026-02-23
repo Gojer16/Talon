@@ -249,10 +249,13 @@ AI agents should read `src/tools/README.md` and this file before modifying any t
   4. Prevents malformed data from corrupting session state
 
 ### TOOL-028: `subagent-tool.ts` — No validation on type enum
-- [ ] **Severity**: 🟡 Medium
-- **File**: `src/tools/subagent-tool.ts`, line 18
+- [x] **Severity**: 🟡 Medium — **RESOLVED**
+- **File**: `src/tools/subagent-tool.ts` (53 lines)
 - **Problem**: `args.type as SubagentType` — no validation that the string is actually one of the valid enum values. If the LLM sends an invalid type, it will fail inside `registry.execute()` with an unclear error.
-- **Fix**: Validate against ['research', 'writer', 'planner', 'critic', 'summarizer'] before calling registry.
+- **Fix Applied**: Added Zod validation:
+  1. `SubagentTaskSchema` - validates type enum, description (non-empty), and context
+  2. Returns structured JSON error with validation details
+  3. Prevents invalid subagent types from reaching registry
 
 ---
 
@@ -333,7 +336,7 @@ For agents picking up this work, here's the recommended order:
 21. ~~`TOOL-024` — Validate screenshot path~~ ✅
 22. ~~`TOOL-026` — Fix regex crash in file_search~~ ✅
 23. ~~`TOOL-027` — Validate scratchpad inputs~~ ✅
-24. `TOOL-028` — Validate subagent type enum
+24. ~~`TOOL-028` — Validate subagent type enum~~ ✅
 
 ### Phase 5 — Documentation ✅ COMPLETED
 25. ~~`TOOL-001` — Document Safari in README~~ ✅
@@ -366,7 +369,7 @@ For agents picking up this work, here's the recommended order:
 | `src/tools/screenshot.ts` | 182 | ✅ Fixed | ~~TOOL-024~~ |
 | `src/tools/scratchpad.ts` | 115 | ✅ Fixed | ~~TOOL-027~~ |
 | `src/tools/normalize.ts` | 60 | ⚪ Dead code | TOOL-004 |
-| `src/tools/subagent-tool.ts` | 33 | ✅ Wired up | ~~TOOL-003~~, TOOL-028 |
+| `src/tools/subagent-tool.ts` | 53 | ✅ Fixed | ~~TOOL-003~~, ~~TOOL-028~~ |
 | `src/tools/memory-search-semantic-tool.ts` | 55 | ⚪ Dead code | TOOL-005 |
 | `src/tools/registry.ts` | 118 | ✅ Functional | ~~TOOL-003~~, TOOL-005 (missing registrations) |
 | `src/tools/README.md` | 487 | ✅ Updated | ~~TOOL-001, TOOL-006, TOOL-007, TOOL-008, TOOL-009~~ |
@@ -375,13 +378,12 @@ For agents picking up this work, here's the recommended order:
 
 ## 8. Summary
 
-**Completed Fixes (Phase 1, 2, 3, 4):** 29 issues resolved
+**Completed Fixes (Phase 1, 2, 3, 4):** 30 issues resolved
 - Critical: TOOL-002, TOOL-025, TOOL-017, TOOL-010
 - High: TOOL-011, TOOL-013, TOOL-016, ~~TOOL-003~~
-- Medium: TOOL-012, TOOL-014, TOOL-015, TOOL-018, TOOL-019, TOOL-020, TOOL-021, TOOL-022, TOOL-023, TOOL-024, TOOL-026, TOOL-030, ~~TOOL-027~~
+- Medium: TOOL-012, TOOL-014, TOOL-015, TOOL-018, TOOL-019, TOOL-020, TOOL-021, TOOL-022, TOOL-023, TOOL-024, TOOL-026, TOOL-030, ~~TOOL-027~~, ~~TOOL-028~~
 - Documentation: ~~TOOL-001~~, ~~TOOL-006~~, ~~TOOL-007~~, ~~TOOL-008~~, ~~TOOL-009~~
 
 **Remaining Issues:**
 - Phase 3 (Dead Code): TOOL-004 (normalize.ts), TOOL-005 (memory-search-semantic-tool.ts), TOOL-029 (output format inconsistency)
-- Phase 4 (Robustness): TOOL-028 (subagent type validation)
 - Phase 5 (Testing): TOOL-031 (validation tests), TOOL-032 (missing test files)
