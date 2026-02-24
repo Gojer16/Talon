@@ -198,6 +198,7 @@ export interface OutboundMessage {
         model?: string;
         error?: boolean;
         errorDetails?: string;
+        routeChannels?: string[];
     };
 }
 
