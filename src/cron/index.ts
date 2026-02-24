@@ -8,12 +8,36 @@ import { logger } from '../utils/logger.js';
 
 // ─── Cron Job Schema ──────────────────────────────────────────────
 
+export const CronActionSchema = z.discriminatedUnion('type', [
+    z.object({
+        type: z.literal('agent'),
+        prompt: z.string().min(1),
+        channel: z.string().min(1).optional(),
+        tools: z.array(z.string().min(1)).optional(),
+    }),
+    z.object({
+        type: z.literal('tool'),
+        tool: z.string().min(1),
+        args: z.record(z.unknown()).default({}),
+        channel: z.string().min(1).optional(),
+        sendOutput: z.boolean().default(false),
+    }),
+    z.object({
+        type: z.literal('message'),
+        text: z.string().min(1),
+        channel: z.string().min(1).optional(),
+    }),
+]);
+
+export type CronAction = z.infer<typeof CronActionSchema>;
+
 export const CronJobSchema = z.object({
     id: z.string(),
     name: z.string(),
     schedule: z.string(), // Cron expression or special keywords
-    command: z.string(),  // Command to execute
+    command: z.string().optional(),  // Legacy command to execute
     args: z.array(z.unknown()).default([]),
+    actions: z.array(CronActionSchema).optional(),
     enabled: z.boolean().default(true),
     timeout: z.number().default(30000), // 30s default
     retryCount: z.number().default(3),
@@ -238,6 +262,30 @@ export class CronService extends EventEmitter {
         this.emit('jobAdded', fullJob);
         
         return fullJob;
+    }
+
+    /**
+     * Load jobs from storage (preserve IDs)
+     */
+    loadJobs(jobs: CronJob[]): void {
+        for (const job of jobs) {
+            try {
+                const cron = new CronExpression(job.schedule);
+                job.nextRun = cron.next().getTime();
+            } catch {
+                job.nextRun = undefined;
+            }
+
+            this.jobs.set(job.id, {
+                ...job,
+                runCount: job.runCount ?? 0,
+                failCount: job.failCount ?? 0,
+                createdAt: job.createdAt ?? Date.now(),
+            });
+            if (!this.runLogs.has(job.id)) {
+                this.runLogs.set(job.id, []);
+            }
+        }
     }
     
     /**
