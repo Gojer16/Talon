@@ -7,6 +7,7 @@ import os from 'node:os';
 import type { TalonConfig } from '../config/schema.js';
 import type { ToolDefinition } from './registry.js';
 import { logger } from '../utils/logger.js';
+import { writeFileAtomicSync } from '../utils/fs.js';
 
 // ─── Path Safety ──────────────────────────────────────────────────
 
@@ -16,6 +17,14 @@ function expandPath(p: string): string {
 
 function isPathAllowed(filePath: string, config: TalonConfig): boolean {
     const resolved = path.resolve(expandPath(filePath));
+
+    // SAFETY DEFAULT: The Talon workspace is ALWAYS writable.
+    // This ensures file_write can save IDENTITY.md, USER.md, etc.
+    // even if config.tools.files.allowedPaths is misconfigured.
+    const workspaceRoot = path.resolve(expandPath(config.workspace?.root || '~/.talon/workspace'));
+    if (resolved.startsWith(workspaceRoot)) {
+        return true;
+    }
 
     // Check denied paths first
     for (const denied of config.tools.files.deniedPaths) {
@@ -143,10 +152,46 @@ export function registerFileTools(config: TalonConfig): ToolDefinition[] {
                     return `Appended ${content.length} characters to "${filePath}"`;
                 }
 
-                fs.writeFileSync(filePath, content, 'utf-8');
+                writeFileAtomicSync(filePath, content);
                 const lineCount = content.split('\n').length;
                 logger.debug({ path: filePath, lines: lineCount }, 'file_write');
                 return `Wrote ${lineCount} lines to "${filePath}"`;
+            },
+        },
+
+        // ── file_delete ────────────────────────────────────────
+        {
+            name: 'file_delete',
+            description: 'Delete a file. Use with care — this is irreversible. Common use: delete BOOTSTRAP.md after first-run setup is complete.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'Absolute or ~-relative path to the file to delete',
+                    },
+                },
+                required: ['path'],
+            },
+            execute: async (args) => {
+                const filePath = path.resolve(expandPath(args.path as string));
+
+                if (!isPathAllowed(filePath, config)) {
+                    return `Error: Access denied to path "${filePath}". Cannot delete files outside allowed paths.`;
+                }
+
+                if (!fs.existsSync(filePath)) {
+                    return `File "${filePath}" does not exist.`;
+                }
+
+                const stat = fs.statSync(filePath);
+                if (stat.isDirectory()) {
+                    return `Error: "${filePath}" is a directory. Use shell_execute with 'rm -r' for directories.`;
+                }
+
+                fs.unlinkSync(filePath);
+                logger.info({ path: filePath }, 'file_delete');
+                return `Deleted "${filePath}"`;
             },
         },
 
@@ -267,7 +312,7 @@ export function registerFileTools(config: TalonConfig): ToolDefinition[] {
                 // Escape regex special characters to prevent invalid regex errors
                 // This makes the search a literal string search, not a regex search
                 const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                
+
                 let regex: RegExp;
                 try {
                     regex = new RegExp(escapedQuery, caseSensitive ? '' : 'i');
