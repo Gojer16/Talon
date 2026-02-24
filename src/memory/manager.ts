@@ -2,10 +2,15 @@
 // Controls what context gets sent to the LLM on every call
 // THE MOST IMPORTANT COMPONENT — this is what makes Talon affordable
 
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import type { Message, Session } from '../utils/types.js';
 import type { LLMMessage } from '../agent/providers/openai-compatible.js';
 import { buildSystemPrompt, loadSoul } from '../agent/prompts.js';
+import { buildRecallContext } from './recall.js';
 import { logger } from '../utils/logger.js';
+import { estimateTokens, truncateToTokens } from '../utils/tokens.js';
 
 // ─── Config ───────────────────────────────────────────────────────
 
@@ -15,6 +20,12 @@ interface MemoryManagerConfig {
     maxSummaryTokens: number;     // ≤800
     keepRecentMessages: number;   // Last 5-10
     maxToolOutputTokens: number;  // ~500 per tool result
+    workspaceTemplateDir?: string;
+    recall?: {
+        maxResults?: number;
+        maxTokens?: number;
+        includeDaily?: boolean;
+    };
 }
 
 const DEFAULT_CONFIG: MemoryManagerConfig = {
@@ -23,26 +34,12 @@ const DEFAULT_CONFIG: MemoryManagerConfig = {
     maxSummaryTokens: 800,
     keepRecentMessages: 10,
     maxToolOutputTokens: 500,
+    recall: {
+        maxResults: 6,
+        maxTokens: 500,
+        includeDaily: true,
+    },
 };
-
-// ─── Token Estimation ─────────────────────────────────────────────
-
-/**
- * Rough token estimation (~4 chars per token for English).
- * Good enough for context budgeting — exact counts come from the API response.
- */
-function estimateTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-}
-
-/**
- * Truncate text to fit within a token budget.
- */
-function truncateToTokens(text: string, maxTokens: number): string {
-    const maxChars = maxTokens * 4;
-    if (text.length <= maxChars) return text;
-    return text.slice(0, maxChars) + '\n... (truncated)';
-}
 
 // ─── Memory Manager ──────────────────────────────────────────────
 
@@ -83,15 +80,16 @@ export class MemoryManager {
             soul,
             this.availableTools,
             this.config.workspaceRoot,
+            this.config.workspaceTemplateDir,
             this.config // Pass config for channel information
         );
-        
+
         logger.debug({
             workspaceRoot: this.config.workspaceRoot,
             systemPromptLength: systemPrompt.length,
             estimatedTokens: estimateTokens(systemPrompt),
         }, 'System prompt built with fresh workspace files');
-        
+
         messages.push({
             role: 'system',
             content: systemPrompt,
@@ -101,15 +99,15 @@ export class MemoryManager {
         if (session.scratchpad && Object.keys(session.scratchpad).length > 0) {
             const scratchpadContent = `## Current Task Progress (Scratchpad)
 
-${session.scratchpad.visited && session.scratchpad.visited.length > 0 
-    ? `**Visited:** ${session.scratchpad.visited.join(', ')}\n` 
-    : ''}${session.scratchpad.collected && session.scratchpad.collected.length > 0 
-    ? `**Collected:** ${JSON.stringify(session.scratchpad.collected, null, 2)}\n` 
-    : ''}${session.scratchpad.pending && session.scratchpad.pending.length > 0 
-    ? `**Pending:** ${session.scratchpad.pending.join(', ')}\n` 
-    : ''}${session.scratchpad.progress 
-    ? `**Progress:** ${JSON.stringify(session.scratchpad.progress, null, 2)}\n` 
-    : ''}
+${session.scratchpad.visited && session.scratchpad.visited.length > 0
+                    ? `**Visited:** ${session.scratchpad.visited.join(', ')}\n`
+                    : ''}${session.scratchpad.collected && session.scratchpad.collected.length > 0
+                        ? `**Collected:** ${JSON.stringify(session.scratchpad.collected, null, 2)}\n`
+                        : ''}${session.scratchpad.pending && session.scratchpad.pending.length > 0
+                            ? `**Pending:** ${session.scratchpad.pending.join(', ')}\n`
+                            : ''}${session.scratchpad.progress
+                                ? `**Progress:** ${JSON.stringify(session.scratchpad.progress, null, 2)}\n`
+                                : ''}
 **Remember:** Continue iterating until scratchpad.pending is empty or task is complete.`;
 
             messages.push({
@@ -130,7 +128,23 @@ ${session.scratchpad.visited && session.scratchpad.visited.length > 0
             });
         }
 
-        // 3. Recent messages only (NOT full history)
+        // 4. Relevant memory recall (keyword retrieval)
+        const lastUserMessage = [...session.messages].reverse().find(m => m.role === 'user');
+        if (lastUserMessage && typeof lastUserMessage.content === 'string') {
+            const recall = buildRecallContext(
+                this.config.workspaceRoot,
+                lastUserMessage.content,
+                this.config.recall,
+            );
+            if (recall) {
+                messages.push({
+                    role: 'system',
+                    content: `## Relevant Memory\n${recall}`,
+                });
+            }
+        }
+
+        // 5. Recent messages only (NOT full history)
         let recentMessages = session.messages.slice(-this.config.keepRecentMessages);
 
         // 🛑 CRITICAL FIX: Prevent orphaned 'tool' messages
@@ -140,11 +154,11 @@ ${session.scratchpad.visited && session.scratchpad.visited.length > 0
             const firstMsg = recentMessages[0];
             // Find the actual parent by looking for the assistant message with matching tool call
             const toolCallId = firstMsg.toolResults?.[0]?.metadata?.confirmation;
-            const parent = session.messages.find((m, idx) => 
-                m.role === 'assistant' && 
+            const parent = session.messages.find((m, idx) =>
+                m.role === 'assistant' &&
                 m.toolCalls?.some(tc => tc.id === toolCallId)
             );
-            
+
             if (parent) {
                 // Prepend the parent if not already present
                 if (!recentMessages.includes(parent)) {
@@ -314,6 +328,43 @@ ${session.scratchpad.visited && session.scratchpad.visited.length > 0
      */
     reloadSoul(): void {
         logger.info('reloadSoul() called - workspace files are now loaded fresh on every message');
+    }
+
+    /**
+     * Wait briefly for workspace files to be ready.
+     * Useful on startup to avoid bootstrapping before templates are copied.
+     */
+    async ensureWorkspaceReady(options?: {
+        requiredFiles?: string[];
+        timeoutMs?: number;
+        intervalMs?: number;
+    }): Promise<void> {
+        const requiredFiles = options?.requiredFiles ?? [
+            'SOUL.md',
+            'USER.md',
+            'IDENTITY.md',
+            'FACTS.json',
+        ];
+        const timeoutMs = options?.timeoutMs ?? 1000;
+        const intervalMs = options?.intervalMs ?? 50;
+        const workspaceRoot = this.config.workspaceRoot.replace(/^~/, os.homedir());
+
+        const deadline = Date.now() + timeoutMs;
+
+        const hasRequiredFiles = (): boolean => {
+            return requiredFiles.every(file => fs.existsSync(path.join(workspaceRoot, file)));
+        };
+
+        while (Date.now() < deadline) {
+            if (hasRequiredFiles()) return;
+            await new Promise(resolve => setTimeout(resolve, intervalMs));
+        }
+
+        logger.warn({
+            workspaceRoot,
+            requiredFiles,
+            timeoutMs,
+        }, 'Workspace readiness timeout');
     }
 
     /**
