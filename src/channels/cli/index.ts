@@ -34,6 +34,12 @@ export class CliChannel extends BaseChannel {
                 const { logger } = await import('../../utils/logger.js');
                 logger.level = level;
             },
+            prompt: async (question: string) => {
+                if (!this.rl) return '';
+                return await new Promise(resolve => {
+                    this.rl!.question(question, answer => resolve(answer.trim()));
+                });
+            },
             config: {
                 workspace: this.config.workspace.root,
                 model: this.config.agent.model,
@@ -161,6 +167,7 @@ export class CliChannel extends BaseChannel {
 
             const message = params.message;
             const isError = message.metadata?.error === true;
+            const routeChannels = message.metadata?.routeChannels ?? [];
 
             if (isError) {
                 this.renderer?.handleChunk({
@@ -168,10 +175,19 @@ export class CliChannel extends BaseChannel {
                     content: message.text,
                 });
             } else {
+                let displayText = message.text;
+                if (routeChannels.length > 0) {
+                    const pretty = (name: string): string => {
+                        if (name === 'cli') return 'TUI';
+                        if (name === 'webchat') return 'Web';
+                        return name.charAt(0).toUpperCase() + name.slice(1);
+                    };
+                    displayText = `Message sent to ${routeChannels.map(pretty).join(' and ')}.`;
+                }
                 // Emit text then done — renderer handles all display
                 this.renderer?.handleChunk({
                     type: 'text',
-                    content: message.text,
+                    content: displayText,
                 });
                 this.renderer?.handleChunk({
                     type: 'done',
