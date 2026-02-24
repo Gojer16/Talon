@@ -7,22 +7,51 @@ import os from 'node:os';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { execSync } from 'node:child_process';
-import { PROVIDERS as PROVIDER_DEFS } from './providers.js';
-import { hasCodexChatGptAuth, readCodexAccessToken } from './openai-auth.js';
 
-async function openUrlInBrowser(url: string): Promise<void> {
-    const { exec } = await import('node:child_process');
-    const platform = process.platform;
-    const openCmd = platform === 'darwin'
-        ? `open "${url}"`
-        : platform === 'win32'
-            ? `start "${url}"`
-            : `xdg-open "${url}"`;
-
-    await new Promise<void>((resolve) => {
-        exec(openCmd, () => resolve());
-    });
+interface Provider {
+    id: string;
+    name: string;
+    envVar: string;
+    baseUrl: string;
+    models: Array<{ id: string; name: string }>;
 }
+
+const PROVIDERS: Provider[] = [
+    {
+        id: 'opencode',
+        name: 'OpenCode (FREE)',
+        envVar: 'OPENCODE_API_KEY',
+        baseUrl: 'https://opencode.ai/zen/v1',
+        models: [
+            { id: 'minimax-m2.5-free', name: 'MiniMax M2.5 Free' },
+            { id: 'big-pickle', name: 'Big Pickle Free' },
+            { id: 'glm-5-free', name: 'GLM 5 Free' },
+            { id: 'kimi-k2.5-free', name: 'Kimi K2.5 Free' },
+        ],
+    },
+    {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        envVar: 'DEEPSEEK_API_KEY',
+        baseUrl: 'https://api.deepseek.com',
+        models: [
+            { id: 'deepseek-chat', name: 'DeepSeek Chat' },
+            { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' },
+        ],
+    },
+    {
+        id: 'openrouter',
+        name: 'OpenRouter',
+        envVar: 'OPENROUTER_API_KEY',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        models: [
+            { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek Chat v3' },
+            { id: 'anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+            { id: 'google/gemini-2.5-flash-preview', name: 'Gemini 2.5 Flash' },
+            { id: 'openai/gpt-4o', name: 'GPT-4o' },
+        ],
+    },
+];
 
 /**
  * Add or change provider
@@ -34,10 +63,10 @@ export async function addProvider(): Promise<void> {
         type: 'list',
         name: 'providerId',
         message: 'Choose provider:',
-        choices: PROVIDER_DEFS.map(p => ({ name: p.name, value: p.id })),
+        choices: PROVIDERS.map(p => ({ name: p.name, value: p.id })),
     });
 
-    const provider = PROVIDER_DEFS.find(p => p.id === providerId)!;
+    const provider = PROVIDERS.find(p => p.id === providerId)!;
     
     let apiKey: string;
     
@@ -46,71 +75,6 @@ export async function addProvider(): Promise<void> {
         apiKey = 'sk-opencode-free-no-key-required';
         console.log(chalk.green('  ✓ OpenCode is FREE - no API key needed!\n'));
         console.log(chalk.dim('    (You can optionally provide your OpenCode API key for higher limits)\n'));
-    } else if (providerId === 'openai') {
-        const { authMethod } = await inquirer.prompt({
-            type: 'list',
-            name: 'authMethod',
-            message: 'OpenAI auth method:',
-            choices: [
-                { name: 'OpenAI Codex (ChatGPT OAuth)', value: 'oauth' },
-                { name: 'OpenAI API key', value: 'api' },
-            ],
-        });
-
-        if (authMethod === 'oauth') {
-            const oauthUrl = 'https://auth.openai.com/oauth/';
-            console.log(chalk.cyan('\n OpenAI Codex OAuth ─────────────────────────────────────────────╮'));
-            console.log(chalk.cyan('│                                                                  │'));
-            console.log(chalk.cyan('│  Browser will open for OpenAI authentication.                    │'));
-            console.log(chalk.cyan('│  If the callback does not auto-complete, paste the redirect URL. │'));
-            console.log(chalk.cyan('│  OpenAI OAuth uses localhost:1455 for the callback.              │'));
-            console.log(chalk.cyan('│                                                                  │'));
-            console.log(chalk.cyan('├──────────────────────────────────────────────────────────────────╯'));
-            console.log(`\nOpen: ${oauthUrl}\n`);
-            await openUrlInBrowser(oauthUrl);
-
-            let token = readCodexAccessToken();
-            if (!token) {
-                console.log(chalk.dim('  Starting Codex OAuth login...'));
-                const { spawnSync } = await import('node:child_process');
-                const login = spawnSync('codex', ['login', '--device-auth'], { stdio: 'inherit' });
-                if (login.status !== 0) {
-                    console.log(chalk.yellow('  ⚠ Codex login did not complete successfully.'));
-                }
-                token = readCodexAccessToken();
-            } else if (hasCodexChatGptAuth()) {
-                console.log(chalk.green('  ✓ Reusing existing ChatGPT OAuth session from Codex.'));
-            }
-
-            if (!token) {
-                const { pastedToken } = await inquirer.prompt({
-                    type: 'password',
-                    name: 'pastedToken',
-                    message: 'Paste OpenAI OAuth access token:',
-                });
-                token = pastedToken;
-            }
-
-            if (!token) {
-                console.log(chalk.yellow('  ⚠ No OAuth token captured. Falling back to API key.'));
-                const { newKey } = await inquirer.prompt({
-                    type: 'password',
-                    name: 'newKey',
-                    message: 'Enter OpenAI API key:',
-                });
-                apiKey = newKey;
-            } else {
-                apiKey = token;
-                console.log(chalk.green('  ✓ OpenAI Codex OAuth token captured\n'));
-            }
-        } else {
-            const { newKey } = await inquirer.prompt({
-                type: 'password',
-                name: 'newKey',
-                message: 'Enter OpenAI API key:',
-            });
-            apiKey = newKey;
-        }
     } else {
         // Check if API key already exists
         const envPath = path.join(os.homedir(), '.talon', '.env');
