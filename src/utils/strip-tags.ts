@@ -45,6 +45,9 @@ export function sanitizeUserFacingText(text: string): string {
     
     // Remove invoke blocks (if any leaked through)
     text = text.replace(/<invoke>[\s\S]*?<\/invoke>/gi, '');
+
+    // Remove route directives (if any leaked through)
+    text = text.replace(/<route>[\s\S]*?<\/route>/gi, '');
     
     // Clean up multiple newlines
     text = text.replace(/\n{3,}/g, '\n\n');
