@@ -4,9 +4,9 @@
 Background task scheduling and execution system for automated, time-based operations. Based on OpenClaw's cron architecture, provides cron expression parsing, job management, execution logging, and retry logic for scheduled tasks.
 
 ## Scope Boundaries
-- **IN SCOPE**: Cron expression parsing, job scheduling, execution management, retry logic, execution logging, job lifecycle events
-- **OUT OF SCOPE**: Task execution logic (delegated to agent), persistent storage (jobs stored in memory), user interface for job management
-- **BOUNDARIES**: Cron service schedules and triggers jobs, but actual execution is delegated to the agent system via event emission. Jobs are memory-resident (not persisted across restarts).
+- **IN SCOPE**: Cron expression parsing, job scheduling, execution management, retry logic, execution logging, job lifecycle events, job persistence to workspace
+- **OUT OF SCOPE**: Long-running background workflows beyond cron execution
+- **BOUNDARIES**: Cron service schedules and triggers jobs, execution is delegated to the agent/tool layer via event emission. Jobs are persisted in `~/.talon/workspace/cron.json`.
 
 ## Architecture Overview
 ```
@@ -15,7 +15,7 @@ Cron Service → Job Scheduler → Cron Expression Parser → Job Execution → 
 Job Management  Timing Logic    Schedule Calc  Event Emission
 ```
 
-**Core Design**: EventEmitter-based service with in-memory job storage. Uses custom cron expression parser supporting standard cron syntax and special keywords (`@yearly`, `@monthly`, `@weekly`, `@daily`, `@hourly`, `@reboot`).
+**Core Design**: EventEmitter-based service with in-memory job storage + persistent file backing. Uses custom cron expression parser supporting standard cron syntax and special keywords (`@yearly`, `@monthly`, `@weekly`, `@daily`, `@hourly`, `@reboot`).
 
 **Key Components**:
 1. `CronService` - Main service managing job lifecycle and scheduling
@@ -26,15 +26,11 @@ Job Management  Timing Logic    Schedule Calc  Event Emission
 ## Folder Structure Explanation
 ```
 cron/
-├── index.ts              # Complete cron system (496 lines)
+├── index.ts              # Cron scheduler + schemas
+├── store.ts              # cron.json persistence
+├── executor.ts           # Agent/tool/message execution
 └── README.md             # This documentation
 ```
-
-**Single File Architecture**: All cron system code resides in `index.ts` containing:
-- Zod schemas for job and run log validation
-- Cron expression parser with full cron syntax support
-- Cron service with job management and scheduling
-- Singleton `cronService` instance exported
 
 ## Public API
 ```typescript
@@ -43,8 +39,9 @@ interface CronJob {
     id: string;                    // Unique job identifier
     name: string;                  // Human-readable name
     schedule: string;              // Cron expression or special keyword
-    command: string;               // Command to execute (passed to agent)
-    args: unknown[];               // Command arguments
+    command?: string;              // Legacy command
+    args: unknown[];               // Legacy args
+    actions?: CronAction[];        // New actions
     enabled: boolean;              // Whether job is active
     timeout: number;               // Execution timeout in ms (default: 30000)
     retryCount: number;            // Retry attempts on failure (default: 3)
@@ -55,6 +52,11 @@ interface CronJob {
     runCount: number;              // Total execution count
     failCount: number;             // Total failure count
 }
+
+type CronAction =
+  | { type: 'agent'; prompt: string; channel?: string; tools?: string[] }
+  | { type: 'tool'; tool: string; args?: Record<string, unknown>; channel?: string; sendOutput?: boolean }
+  | { type: 'message'; text: string; channel?: string };
 
 interface CronRunLog {
     id: string;                    // Unique run identifier
@@ -86,25 +88,21 @@ class CronService extends EventEmitter {
     // Job Management
     addJob(job: Omit<CronJob, 'id' | 'createdAt' | 'runCount' | 'failCount'>): CronJob;
     removeJob(id: string): boolean;
-    updateJob(id: string, updates: Partial<CronJob>): CronJob | null;
+    loadJobs(jobs: CronJob[]): void;
     getJob(id: string): CronJob | undefined;
     getAllJobs(): CronJob[];
-    enableJob(id: string): boolean;
-    disableJob(id: string): boolean;
+    setEnabled(id: string, enabled: boolean): boolean;
     
     // Execution Control
-    runJobNow(id: string): Promise<CronRunLog>;
-    cancelJob(id: string): boolean;
+    runNow(id: string): Promise<CronRunLog>;
     
     // Logs and Status
-    getJobLogs(id: string): CronRunLog[];
-    getStatus(): { jobCount: number; runningCount: number; nextRun?: number };
-    clearJobLogs(id: string): void;
+    getRunLogs(id: string): CronRunLog[];
+    getStatus(): { running: boolean; jobCount: number; enabledCount: number };
     
     // Events
     on(event: 'started' | 'stopped', listener: () => void): this;
-    on(event: 'jobAdded' | 'jobRemoved' | 'jobUpdated', listener: (job: CronJob) => void): this;
-    on(event: 'jobEnabled' | 'jobDisabled', listener: (jobId: string) => void): this;
+    on(event: 'jobAdded' | 'jobRemoved' | 'jobStatusChanged', listener: (job: CronJob) => void): this;
     on(event: 'jobStarted', listener: (job: CronJob, runId: string) => void): this;
     on(event: 'jobCompleted', listener: (job: CronJob, log: CronRunLog) => void): this;
     on(event: 'jobFailed', listener: (job: CronJob, log: CronRunLog, error: Error) => void): this;
@@ -118,6 +116,13 @@ export const cronService = new CronService();
 **Usage Pattern**:
 ```typescript
 import { cronService } from './cron/index.js';
+import { CronJobStore } from './cron/store.js';
+import { createCronExecutor } from './cron/executor.js';
+
+// Load jobs from workspace
+const store = new CronJobStore('~/.talon/workspace');
+const jobs = store.loadJobs();
+cronService.loadJobs(jobs);
 
 // Start service
 cronService.start();
@@ -126,17 +131,18 @@ cronService.start();
 const job = cronService.addJob({
     name: 'Daily Summary',
     schedule: '0 9 * * *', // 9 AM daily
-    command: 'generate_daily_summary',
-    args: [],
+    actions: [
+        { type: 'agent', prompt: 'Summarize my day and send to Telegram.' },
+    ],
     enabled: true,
     timeout: 60000,
     retryCount: 3,
 });
 
 // Listen for execution events
+const executor = createCronExecutor(agentLoop, sessionManager, eventBus, config);
 cronService.on('executeCommand', async (job) => {
-    console.log(`Executing: ${job.command}`);
-    // Delegate to agent system
+    await executor(job);
 });
 
 // Get status
@@ -166,8 +172,8 @@ console.log(`Active jobs: ${status.jobCount}`);
 **Job Execution Flow** (`index.ts:300-400`):
 1. Job marked as running with `CronRunLog` created
 2. `jobStarted` event emitted with job and run ID
-3. `executeCommand` event emitted for agent to handle
-4. Agent executes command and returns result
+3. `executeCommand` event emitted for executor to handle actions
+4. Executor runs agent/tool/message actions
 5. Job marked as completed/failed with appropriate logging
 6. `jobCompleted` or `jobFailed` event emitted
 
