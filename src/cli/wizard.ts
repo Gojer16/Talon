@@ -7,6 +7,7 @@ import os from 'node:os';
 import { select, input, password, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
 import { PROVIDERS, checkModel, type CustomProviderConfig } from './providers.js';
+import { hasCodexChatGptAuth, readCodexAccessToken } from './openai-auth.js';
 import { TALON_HOME, ensureRuntimeDirs } from '../config/loader.js';
 
 const CONFIG_PATH = path.join(TALON_HOME, 'config.json');
@@ -131,6 +132,25 @@ function printBanner(): void {
     console.log('');
 }
 
+async function openUrlInBrowser(url: string): Promise<void> {
+    const { exec } = await import('node:child_process');
+    const platform = process.platform;
+    const openCmd = platform === 'darwin'
+        ? `open "${url}"`
+        : platform === 'win32'
+            ? `start "${url}"`
+            : `xdg-open "${url}"`;
+
+    await new Promise<void>((resolve) => {
+        exec(openCmd, (err) => {
+            if (err) {
+                console.log(chalk.yellow('  ⚠ Could not open browser automatically.'));
+            }
+            resolve();
+        });
+    });
+}
+
 // ─── Step 0: Existing Config Detection ────────────────────────────
 
 async function detectExistingConfig(): Promise<'fresh' | 'keep' | 'modify' | 'reset'> {
@@ -225,10 +245,84 @@ async function stepModelAuth(): Promise<WizardResult['agent']> {
 
     // OpenCode doesn't need API key
     let apiKey: string;
-    
+
     if (providerId === 'opencode') {
         apiKey = 'sk-opencode-free-no-key-required';
         console.log(chalk.green('  ✓ OpenCode is 100% FREE - no API key needed!'));
+    } else if (providerId === 'openai') {
+        const authMethod = await select({
+            message: 'OpenAI auth method',
+            choices: [
+                { name: 'OpenAI Codex (ChatGPT OAuth)', value: 'oauth' as const },
+                { name: 'OpenAI API key', value: 'api' as const },
+                { name: 'Back', value: 'back' as const },
+            ],
+        });
+
+        if (authMethod === 'back') {
+            return await stepModelAuth();
+        }
+
+        if (authMethod === 'oauth') {
+            console.log(chalk.cyan('\n OpenAI Codex OAuth ─────────────────────────────────────────────╮'));
+            console.log(chalk.cyan('│                                                                  │'));
+            console.log(chalk.cyan('│  Browser will open for OpenAI authentication.                    │'));
+            console.log(chalk.cyan('│  If the callback does not auto-complete, paste the redirect URL. │'));
+            console.log(chalk.cyan('│  OpenAI OAuth uses localhost:1455 for the callback.              │'));
+            console.log(chalk.cyan('│                                                                  │'));
+            console.log(chalk.cyan('├──────────────────────────────────────────────────────────────────╯'));
+
+            const oauthUrl = 'https://auth.openai.com/oauth/';
+            console.log(`\nOpen: ${oauthUrl}\n`);
+            await openUrlInBrowser(oauthUrl);
+
+            let token = readCodexAccessToken();
+            if (!token) {
+                console.log(chalk.dim('  Starting Codex OAuth login...'));
+                const { spawnSync } = await import('node:child_process');
+                const login = spawnSync('codex', ['login', '--device-auth'], { stdio: 'inherit' });
+
+                if (login.status !== 0) {
+                    console.log(chalk.yellow('  ⚠ Codex login command did not complete successfully.'));
+                }
+                token = readCodexAccessToken();
+            } else if (hasCodexChatGptAuth()) {
+                console.log(chalk.green('  ✓ Reusing existing ChatGPT OAuth session from Codex.'));
+            }
+
+            if (!token) {
+                token = await password({
+                    message: 'Paste OpenAI OAuth access token:',
+                });
+            }
+
+            if (!token) {
+                console.log(chalk.red('  ✗ No OAuth token found. Falling back to API key prompt.'));
+                apiKey = await password({
+                    message: 'Enter your OpenAI API key:',
+                });
+            } else {
+                apiKey = token;
+                console.log(chalk.green('  ✓ OpenAI Codex OAuth token captured.'));
+            }
+        } else {
+            // OpenAI API key path
+            const existingKey = process.env[provider.envVar];
+            if (existingKey) {
+                console.log(chalk.green(`  ✓ Found ${provider.envVar} in environment`));
+                const useExisting = await confirm({
+                    message: `Use existing ${provider.envVar}?`,
+                    default: true,
+                });
+                apiKey = useExisting ? existingKey : await password({
+                    message: 'Enter your OpenAI API key:',
+                });
+            } else {
+                apiKey = await password({
+                    message: 'Enter your OpenAI API key:',
+                });
+            }
+        }
     } else {
         // Check for existing env var
         const existingKey = process.env[provider.envVar];
@@ -345,6 +439,7 @@ async function stepWorkspace(): Promise<WizardResult['workspace']> {
     const templateFiles = [
         'SOUL.md',
         'FACTS.json',
+        'PROFILE.json',
         'USER.md',
         'IDENTITY.md',
         'BOOTSTRAP.md',
@@ -353,6 +448,7 @@ async function stepWorkspace(): Promise<WizardResult['workspace']> {
         'TOOLS.md',
         'HEARTBEAT.md',
         'BOOT.md',
+        'cron.json',
     ];
 
     for (const file of templateFiles) {

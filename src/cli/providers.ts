@@ -55,7 +55,7 @@ export const PROVIDERS: ProviderDef[] = [
     },
     {
         id: 'openai',
-        name: 'OpenAI (Codex + Thinking)',
+        name: 'OpenAI (Codex OAuth + API key)',
         envVar: 'OPENAI_API_KEY',
         baseUrl: 'https://api.openai.com/v1',
         apiType: 'openai-compatible',
