@@ -7,51 +7,7 @@ import os from 'node:os';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { execSync } from 'node:child_process';
-
-interface Provider {
-    id: string;
-    name: string;
-    envVar: string;
-    baseUrl: string;
-    models: Array<{ id: string; name: string }>;
-}
-
-const PROVIDERS: Provider[] = [
-    {
-        id: 'opencode',
-        name: 'OpenCode (FREE)',
-        envVar: 'OPENCODE_API_KEY',
-        baseUrl: 'https://opencode.ai/zen/v1',
-        models: [
-            { id: 'minimax-m2.5-free', name: 'MiniMax M2.5 Free' },
-            { id: 'big-pickle', name: 'Big Pickle Free' },
-            { id: 'glm-5-free', name: 'GLM 5 Free' },
-            { id: 'kimi-k2.5-free', name: 'Kimi K2.5 Free' },
-        ],
-    },
-    {
-        id: 'deepseek',
-        name: 'DeepSeek',
-        envVar: 'DEEPSEEK_API_KEY',
-        baseUrl: 'https://api.deepseek.com',
-        models: [
-            { id: 'deepseek-chat', name: 'DeepSeek Chat' },
-            { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' },
-        ],
-    },
-    {
-        id: 'openrouter',
-        name: 'OpenRouter',
-        envVar: 'OPENROUTER_API_KEY',
-        baseUrl: 'https://openrouter.ai/api/v1',
-        models: [
-            { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek Chat v3' },
-            { id: 'anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-            { id: 'google/gemini-2.5-flash-preview', name: 'Gemini 2.5 Flash' },
-            { id: 'openai/gpt-4o', name: 'GPT-4o' },
-        ],
-    },
-];
+import { PROVIDERS as PROVIDER_DEFS } from './providers.js';
 
 /**
  * Add or change provider
@@ -63,10 +19,10 @@ export async function addProvider(): Promise<void> {
         type: 'list',
         name: 'providerId',
         message: 'Choose provider:',
-        choices: PROVIDERS.map(p => ({ name: p.name, value: p.id })),
+        choices: PROVIDER_DEFS.map(p => ({ name: p.name, value: p.id })),
     });
 
-    const provider = PROVIDERS.find(p => p.id === providerId)!;
+    const provider = PROVIDER_DEFS.find(p => p.id === providerId)!;
     
     let apiKey: string;
     
