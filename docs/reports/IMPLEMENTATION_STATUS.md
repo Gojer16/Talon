@@ -395,9 +395,9 @@ Add SQLite + vector embeddings for semantic search.
 
 ## 🔗 Related Documents
 
-- [googleImplement.md](../googleImplement.md) - Shadow Loop roadmap
-- [KimiImplement.md](../KimiImplement.md) - Subagent roadmap
-- [MiniMaxImplement.md](../MiniMaxImplement.md) - Channel roadmap
+- [googleImplement.md](../archive/root-notes/googleImplement.md) - Shadow Loop roadmap
+- [KimiImplement.md](../archive/root-notes/KimiImplement.md) - Subagent roadmap
+- [MiniMaxImplement.md](../archive/root-notes/MiniMaxImplement.md) - Channel roadmap
 - [docs/08-ROADMAP.md](08-ROADMAP.md) - Phase breakdown
 - [docs/TALON_FEATURES.md](TALON_FEATURES.md) - Complete feature catalog
 
@@ -769,9 +769,9 @@ Expand channel support and add browser interface.
 
 ## 🔗 Related Documents
 
-- [googleImplement.md](../googleImplement.md) - Shadow Loop roadmap
-- [KimiImplement.md](../KimiImplement.md) - Subagent roadmap
-- [MiniMaxImplement.md](../MiniMaxImplement.md) - Channel roadmap
+- [googleImplement.md](../archive/root-notes/googleImplement.md) - Shadow Loop roadmap
+- [KimiImplement.md](../archive/root-notes/KimiImplement.md) - Subagent roadmap
+- [MiniMaxImplement.md](../archive/root-notes/MiniMaxImplement.md) - Channel roadmap
 - [docs/08-ROADMAP.md](08-ROADMAP.md) - Phase breakdown
 - [docs/TALON_FEATURES.md](TALON_FEATURES.md) - Complete feature catalog
 

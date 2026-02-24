@@ -364,7 +364,7 @@ src/gateway/
 
 ### Reference Implementation
 - **OpenClaw Memory:** `/Users/orlandoascanio/openclaw/src/memory/`
-- **Analysis Document:** `memoryOpenclaw.md`
+- **Analysis Document:** `docs/archive/root-notes/memoryOpenclaw.md`
 
 ### Key Patterns
 1. Singleton with cache
@@ -437,7 +437,7 @@ src/gateway/
 ## 📞 Support
 
 ### Questions?
-- Review `memoryOpenclaw.md` for OpenClaw patterns
+- Review `docs/archive/root-notes/memoryOpenclaw.md` for OpenClaw patterns
 - Check individual part files for detailed steps
 - Run tests to verify implementation
 

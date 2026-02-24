@@ -188,7 +188,7 @@ Ghost message: "I see you created new-feature.ts. Need tests?"
 
 ## 🔗 Related Documents
 
-- [googleImplement.md](../googleImplement.md) - Shadow Loop roadmap
+- [googleImplement.md](googleImplement.md) - Shadow Loop roadmap
 - [docs/00-VISION.md](docs/00-VISION.md) - Core principles
 - [docs/01-ARCHITECTURE.md](docs/01-ARCHITECTURE.md) - Shadow Loop architecture
 - [docs/08-ROADMAP.md](docs/08-ROADMAP.md) - Phase 2 plans

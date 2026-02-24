@@ -13,7 +13,7 @@ git add src/tools/memory-search-semantic-tool.ts
 git add scripts/test-vector-memory.js
 git add scripts/install-vector-deps.sh
 git add docs/VECTOR_MEMORY.md
-git add VECTOR_MEMORY_IMPLEMENTATION.md
+git add docs/archive/root-notes/VECTOR_MEMORY_IMPLEMENTATION.md
 
 # Stage modified files
 echo "📝 Staging modified files..."
