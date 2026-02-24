@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "id": "morning-routine",
+      "name": "Morning Routine",
+      "schedule": "0 6 * * *",
+      "enabled": false,
+      "timeout": 60000,
+      "retryCount": 1,
+      "actions": [
+        {
+          "type": "agent",
+          "prompt": "Generate my 6am routine. Include a short Russian phrase and a podcast suggestion."
+        }
+      ]
+    }
+  ]
+}
